@@ -24,6 +24,13 @@ type LanceTable = {
 
 const TABLE_NAME = "memories";
 
+interface ScopeCache {
+  records: MemoryRecord[];
+  tokenized: string[][];
+  idf: Map<string, number>;
+  norms: Map<string, number>;
+}
+
 export class MemoryStore {
   private lancedb: LanceModule | null = null;
   private connection: LanceConnection | null = null;
@@ -33,6 +40,7 @@ export class MemoryStore {
     fts: false,
     ftsError: "",
   };
+  private scopeCache = new Map<string, ScopeCache>();
 
   constructor(private readonly dbPath: string) {}
 
@@ -69,6 +77,7 @@ export class MemoryStore {
   async put(record: MemoryRecord): Promise<void> {
     const table = this.requireTable();
     await table.add([record]);
+    this.invalidateScope(record.scope);
   }
 
   async search(params: {
@@ -80,17 +89,19 @@ export class MemoryStore {
     bm25Weight: number;
     minScore: number;
   }): Promise<SearchResult[]> {
-    const rows = await this.readByScopes(params.scopes);
-    if (rows.length === 0) return [];
+    const cached = await this.getCachedScopes(params.scopes);
+    if (cached.records.length === 0) return [];
 
     const queryTokens = tokenize(params.query);
-    const idf = computeIdf(rows.map((row) => tokenize(row.text)));
 
-    const scored = rows
+    const queryNorm = vecNorm(params.queryVector);
+
+    const scored = cached.records
       .filter((record) => params.queryVector.length === 0 || record.vector.length === params.queryVector.length)
-      .map((record) => {
-        const vectorScore = cosineSimilarity(params.queryVector, record.vector);
-        const bm25Score = bm25LikeScore(queryTokens, tokenize(record.text), idf);
+      .map((record, index) => {
+        const recordNorm = cached.norms.get(record.id) ?? vecNorm(record.vector);
+        const vectorScore = fastCosine(params.queryVector, record.vector, queryNorm, recordNorm);
+        const bm25Score = bm25LikeScore(queryTokens, cached.tokenized[index], cached.idf);
         const score = params.vectorWeight * vectorScore + params.bm25Weight * bm25Score;
         return { record, score, vectorScore, bm25Score };
       })
@@ -106,6 +117,7 @@ export class MemoryStore {
     const match = rows.find((row) => row.id === id);
     if (!match) return false;
     await this.requireTable().delete(`id = '${escapeSql(match.id)}'`);
+    this.invalidateScope(match.scope);
     return true;
   }
 
@@ -113,6 +125,7 @@ export class MemoryStore {
     const rows = await this.readByScopes([scope]);
     if (rows.length === 0) return 0;
     await this.requireTable().delete(`scope = '${escapeSql(scope)}'`);
+    this.invalidateScope(scope);
     return rows.length;
   }
 
@@ -128,6 +141,7 @@ export class MemoryStore {
     for (const row of toDelete) {
       await this.requireTable().delete(`id = '${escapeSql(row.id)}'`);
     }
+    this.invalidateScope(scope);
     return toDelete.length;
   }
 
@@ -142,6 +156,42 @@ export class MemoryStore {
       fts: this.indexState.fts,
       ftsError: this.indexState.ftsError || undefined,
     };
+  }
+
+  private invalidateScope(scope: string): void {
+    this.scopeCache.delete(scope);
+  }
+
+  private async getCachedScopes(scopes: string[]): Promise<ScopeCache> {
+    const allRecords: MemoryRecord[] = [];
+    const allTokenized: string[][] = [];
+    const allNorms = new Map<string, number>();
+
+    for (const scope of scopes) {
+      let entry = this.scopeCache.get(scope);
+      if (!entry) {
+        const records = await this.readByScopes([scope]);
+        const tokenized = records.map((record) => tokenize(record.text));
+        const idf = computeIdf(tokenized);
+        const norms = new Map<string, number>();
+        for (const record of records) {
+          norms.set(record.id, vecNorm(record.vector));
+        }
+        entry = { records, tokenized, idf, norms };
+        this.scopeCache.set(scope, entry);
+      }
+      allRecords.push(...entry.records);
+      allTokenized.push(...entry.tokenized);
+      for (const [id, norm] of entry.norms) {
+        allNorms.set(id, norm);
+      }
+    }
+
+    const idf = scopes.length === 1 && this.scopeCache.has(scopes[0])
+      ? this.scopeCache.get(scopes[0])!.idf
+      : computeIdf(allTokenized);
+
+    return { records: allRecords, tokenized: allTokenized, idf, norms: allNorms };
   }
 
   private requireTable(): LanceTable {
@@ -248,6 +298,25 @@ function computeIdf(docs: string[][]): Map<string, number> {
     idf.set(token, Math.log(1 + (totalDocs - count + 0.5) / (count + 0.5)));
   }
   return idf;
+}
+
+function vecNorm(v: number[]): number {
+  let sum = 0;
+  for (let i = 0; i < v.length; i += 1) {
+    sum += v[i] * v[i];
+  }
+  return Math.sqrt(sum);
+}
+
+function fastCosine(a: number[], b: number[], normA: number, normB: number): number {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
+  const denom = normA * normB;
+  if (denom === 0) return 0;
+  let dot = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+  }
+  return dot / denom;
 }
 
 function bm25LikeScore(query: string[], doc: string[], idf: Map<string, number>): number {

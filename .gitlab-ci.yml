@@ -1,31 +1,59 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/user/application_security/sast/#available-cicd-variables
-# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure/
-# Dependency Scanning customization: https://docs.gitlab.com/user/application_security/dependency_scanning/#customizing-analyzer-behavior
-# Container Scanning customization: https://docs.gitlab.com/user/application_security/container_scanning/#customizing-analyzer-behavior
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
 stages:
-- build
-- test
-- deploy
-- review
-- dast
-- staging
-- canary
-- production
-- incremental rollout 10%
-- incremental rollout 25%
-- incremental rollout 50%
-- incremental rollout 100%
-- performance
-- cleanup
-- secret-detection
-sast:
-  stage: test
+  - test
+  - benchmark
+  - release
+  - secret-detection
+
 include:
-- template: Auto-DevOps.gitlab-ci.yml
+  - template: Auto-DevOps.gitlab-ci.yml
+
 variables:
-  SECRET_DETECTION_ENABLED: 'true'
+  SECRET_DETECTION_ENABLED: "true"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  COMPOSE_FILE: docker-compose.ci.yml
+
+.docker-compose-job:
+  image: docker:27
+  services:
+    - docker:27-dind
+  before_script:
+    - docker version
+    - docker compose version
+
+verify_mr:
+  extends: .docker-compose-job
+  stage: test
+  script:
+    - docker compose build --no-cache && docker compose up -d
+    - docker compose exec -T app npm run verify
+  rules:
+    - if: "$CI_PIPELINE_SOURCE == 'merge_request_event'"
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+
+benchmark_latency_scheduled:
+  extends: .docker-compose-job
+  stage: benchmark
+  script:
+    - docker compose build --no-cache && docker compose up -d
+    - docker compose exec -T app npm run benchmark:latency
+  rules:
+    - if: "$CI_PIPELINE_SOURCE == 'schedule'"
+
+verify_full_release:
+  extends: .docker-compose-job
+  stage: release
+  script:
+    - docker compose build --no-cache && docker compose up -d
+    - docker compose exec -T app npm run verify:full
+    - docker compose exec -T app sh -lc 'cp lancedb-opencode-pro-*.tgz /tmp/lancedb-opencode-pro.tgz'
+    - docker compose cp app:/tmp/lancedb-opencode-pro.tgz ./lancedb-opencode-pro.tgz
+  artifacts:
+    paths:
+      - lancedb-opencode-pro.tgz
+    expire_in: 30 days
+  rules:
+    - if: "$CI_COMMIT_TAG"
+
 secret_detection:
   stage: secret-detection

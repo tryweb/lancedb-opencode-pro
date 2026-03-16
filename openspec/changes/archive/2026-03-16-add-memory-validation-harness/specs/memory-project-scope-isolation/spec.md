@@ -1,14 +1,4 @@
-# memory-project-scope-isolation Specification
-
-## Purpose
-TBD - created by archiving change add-lancedb-memory-provider. Update Purpose after archive.
-## Requirements
-### Requirement: Active project scope derivation
-The system MUST derive an active project memory scope from current Git/worktree context.
-
-#### Scenario: User switches repository directory
-- **WHEN** user switches from one project directory to another with different Git identity
-- **THEN** the active memory scope changes to the target project's scope before retrieval and capture
+## MODIFIED Requirements
 
 ### Requirement: Scope-constrained retrieval
 The system MUST constrain memory retrieval to the active scope and explicitly allowed shared scopes, and the project MUST provide automated tests that prove no cross-scope leakage across representative multi-project scenarios.
@@ -31,4 +21,3 @@ The system MUST write auto-captured memories into the active scope by default, a
 #### Scenario: Scope-aware maintenance verification
 - **WHEN** maintainers execute validation that writes, lists, deletes, and clears memories across multiple scopes
 - **THEN** only the targeted scope is affected by each operation
-

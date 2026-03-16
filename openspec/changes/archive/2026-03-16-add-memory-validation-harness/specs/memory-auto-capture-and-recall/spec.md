@@ -1,8 +1,5 @@
-# memory-auto-capture-and-recall Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change add-lancedb-memory-provider. Update Purpose after archive.
-## Requirements
 ### Requirement: Automatic durable memory capture
 The system MUST automatically capture durable memory candidates from successful conversation outcomes at end-of-turn or end-of-session lifecycle points without requiring explicit user commands, and the project MUST provide automated regression checks that verify captured text eligibility, category assignment, and minimum-length enforcement.
 
@@ -25,13 +22,6 @@ The system MUST support hybrid retrieval combining vector similarity and BM25 le
 - **WHEN** maintainers run the retrieval-quality workflow against the defined query set
 - **THEN** the workflow reports recall and robustness metrics that can be compared with the documented release thresholds
 
-### Requirement: Context injection safety
-The system MUST inject retrieved memory context as auxiliary guidance and MUST NOT override user prompt intent.
-
-#### Scenario: Retrieved memory is presented as suggestion
-- **WHEN** relevant past memory is found for a new issue
-- **THEN** the injected context is framed as optional historical guidance rather than mandatory instruction
-
 ### Requirement: Retrieval fallback behavior
 The system MUST degrade gracefully when one retrieval component is unavailable, and the project MUST provide automated verification that fallback behavior does not crash plugin recall flows.
 
@@ -42,4 +32,3 @@ The system MUST degrade gracefully when one retrieval component is unavailable, 
 #### Scenario: Embedding backend unavailable during verification
 - **WHEN** validation exercises a retrieval path while the embedding backend is unavailable
 - **THEN** the system remains operational and returns the documented degraded behavior instead of crashing the plugin hooks
-

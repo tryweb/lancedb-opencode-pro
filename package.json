@@ -18,9 +18,16 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run typecheck",
-    "test:e2e": "node scripts/e2e-opencode-memory.mjs"
+    "test:foundation": "npm run build:test && node --test dist-test/test/foundation/foundation.test.js",
+    "test:regression": "npm run build:test && node --test dist-test/test/regression/plugin.test.js",
+    "test:retrieval": "npm run build:test && node --test dist-test/test/retrieval/retrieval.test.js",
+    "benchmark:latency": "npm run build:test && node dist-test/test/benchmark/latency.js",
+    "test:e2e": "node scripts/e2e-opencode-memory.mjs",
+    "verify": "npm run typecheck && npm run build && npm run test:foundation && npm run test:regression && npm run test:retrieval",
+    "verify:full": "npm run verify && npm run benchmark:latency && npm pack"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.26.2",
