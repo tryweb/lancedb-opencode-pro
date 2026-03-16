@@ -8,36 +8,59 @@ LanceDB-backed long-term memory provider for OpenCode.
 - Configuration model: sidecar config file at `~/.config/opencode/lancedb-opencode-pro.json`
 - Not recommended: top-level `memory` in `opencode.json`, because current OpenCode versions reject that key during config validation
 
-## Install
+## Install (Recommended for current maturity: local `.tgz`)
+
+At the moment, this project is best distributed as a local package tarball (`.tgz`) instead of a registry package name.
+
+Reason: OpenCode resolves non-`file://` plugin entries via its cache installer; if the package is not published to a public/private registry, startup can stall during dependency resolution.
+
+## SOP: Pack on build host, install on target host
+
+Use this flow when you want to enable `lancedb-opencode-pro` on another machine that already has OpenCode installed.
+
+1. On the build host, build and pack:
 
 ```bash
-npm install -g lancedb-opencode-pro
+npm ci
+npm run typecheck
+npm run build
+npm pack
 ```
 
-## Install on Another Host
+This generates a file like:
 
-Use this flow when you want to enable `lancedb-opencode-pro` on a different machine that already has OpenCode installed.
+```text
+lancedb-opencode-pro-0.1.0.tgz
+```
 
-1. Install the plugin on that host:
+2. Copy the `.tgz` to the target host (example):
 
 ```bash
-npm install -g lancedb-opencode-pro
+scp lancedb-opencode-pro-0.1.0.tgz <user>@<target-host>:/tmp/
 ```
 
-2. Register the plugin in `~/.config/opencode/opencode.json`:
+3. On the target host, install into a fixed local plugin directory:
+
+```bash
+mkdir -p ~/.config/opencode/plugins/lancedb-opencode-pro
+npm install --prefix ~/.config/opencode/plugins/lancedb-opencode-pro /tmp/lancedb-opencode-pro-0.1.0.tgz
+```
+
+4. Register the plugin as a `file://` path in `~/.config/opencode/opencode.json`:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "lancedb-opencode-pro"
+    "oh-my-opencode",
+    "file:///home/<user>/.config/opencode/plugins/lancedb-opencode-pro/node_modules/lancedb-opencode-pro/dist/index.js"
   ]
 }
 ```
 
-If you already use other plugins, keep them and append `"lancedb-opencode-pro"` to the existing `plugin` array.
+If you already use other plugins, keep them and append this `file://` entry.
 
-3. For OpenCode `1.2.27+`, create the sidecar config file `~/.config/opencode/lancedb-opencode-pro.json`:
+5. For OpenCode `1.2.27+`, create the sidecar config file `~/.config/opencode/lancedb-opencode-pro.json`:
 
 ```json
 {
@@ -60,14 +83,14 @@ If you already use other plugins, keep them and append `"lancedb-opencode-pro"` 
 }
 ```
 
-4. Set `embedding.baseUrl` to the Ollama endpoint that is reachable from that host.
+6. Set `embedding.baseUrl` to the Ollama endpoint that is reachable from that host.
 
 - Same machine as OpenCode: `http://127.0.0.1:11434`
 - Another machine on the network: for example `http://192.168.11.206:11434`
 
 You do not need `LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL` if the sidecar file already contains the correct `embedding.baseUrl`. Use the environment variable only when you want to override the file at runtime.
 
-5. Make sure Ollama is reachable from that host before starting OpenCode:
+7. Make sure Ollama is reachable from that host before starting OpenCode:
 
 ```bash
 curl http://127.0.0.1:11434/api/tags
@@ -79,7 +102,13 @@ or, for a remote Ollama server:
 curl http://192.168.11.206:11434/api/tags
 ```
 
-6. Start or restart OpenCode, then verify the memory store initializes.
+8. Verify plugin file path and start/restart OpenCode:
+
+```bash
+ls -la ~/.config/opencode/plugins/lancedb-opencode-pro/node_modules/lancedb-opencode-pro/dist/index.js
+```
+
+Then start or restart OpenCode, and verify memory store initialization.
 
 After the first successful memory operation, LanceDB files should appear under:
 

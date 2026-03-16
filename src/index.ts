@@ -1,6 +1,6 @@
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
-import type { Config, Part, TextPart } from "@opencode-ai/sdk";
+import type { Part, TextPart } from "@opencode-ai/sdk";
 import { resolveMemoryConfig } from "./config.js";
 import { OllamaEmbedder } from "./embedder.js";
 import { extractCaptureCandidate } from "./extract.js";
@@ -17,7 +17,6 @@ const plugin: Plugin = async (input) => {
   const hooks: Hooks = {
     config: async (config) => {
       state.config = resolveMemoryConfig(config, input.worktree);
-      await state.ensureInitialized();
     },
     event: async ({ event }) => {
       if (event.type === "session.idle" || event.type === "session.compacted") {
@@ -33,6 +32,7 @@ const plugin: Plugin = async (input) => {
     "experimental.chat.system.transform": async (eventInput, eventOutput) => {
       if (!eventInput.sessionID) return;
       await state.ensureInitialized();
+      if (!state.initialized) return;
 
       const query = await getLastUserText(eventInput.sessionID, input.client);
       if (!query) return;
@@ -78,6 +78,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
+          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
           const activeScope = args.scope ?? deriveProjectScope(context.worktree);
           const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
 
@@ -117,6 +118,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
+          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
           if (!args.confirm) {
             return "Rejected: memory_delete requires confirm=true.";
           }
@@ -134,6 +136,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args) => {
           await state.ensureInitialized();
+          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
           if (!args.confirm) {
             return "Rejected: destructive clear requires confirm=true.";
           }
@@ -148,6 +151,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
+          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
           const scope = args.scope ?? deriveProjectScope(context.worktree);
           const entries = await state.store.list(scope, 20);
           const incompatibleVectors = await state.store.countIncompatibleVectors(
@@ -177,8 +181,7 @@ const plugin: Plugin = async (input) => {
 };
 
 async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<RuntimeState> {
-  const config = await readCurrentConfig(input.client);
-  const resolved = resolveMemoryConfig(config, input.worktree);
+  const resolved = resolveMemoryConfig(undefined, input.worktree);
   const embedder = new OllamaEmbedder(resolved.embedding);
   const store = new MemoryStore(resolved.dbPath);
 
@@ -191,23 +194,19 @@ async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<Runtime
     captureBuffer: new Map(),
     ensureInitialized: async () => {
       if (state.initialized) return;
-      const dim = await state.embedder.dim();
-      await state.store.init(dim);
-      state.initialized = true;
+      try {
+        const dim = await state.embedder.dim();
+        await state.store.init(dim);
+        state.initialized = true;
+      } catch (error) {
+        console.warn(
+          `[lancedb-opencode-pro] initialization deferred: ${toErrorMessage(error)}`,
+        );
+      }
     },
   };
 
   return state;
-}
-
-async function readCurrentConfig(client: { config: { get: () => Promise<unknown> } }): Promise<Config | undefined> {
-  try {
-    const response = await client.config.get();
-    const payload = unwrapData(response);
-    return payload as Config;
-  } catch {
-    return undefined;
-  }
 }
 
 async function getLastUserText(
@@ -246,6 +245,7 @@ async function flushAutoCapture(
   if (!candidate) return;
 
   await state.ensureInitialized();
+  if (!state.initialized) return;
 
   let vector: number[] = [];
   try {
