@@ -4,6 +4,7 @@ import type { Part, TextPart } from "@opencode-ai/sdk";
 import { resolveMemoryConfig } from "./config.js";
 import { OllamaEmbedder } from "./embedder.js";
 import { extractCaptureCandidate } from "./extract.js";
+import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
 import type { MemoryRuntimeConfig } from "./types.js";
@@ -168,6 +169,114 @@ const plugin: Plugin = async (input) => {
               incompatibleVectors,
               index: health,
               embeddingModel: state.config.embedding.model,
+            },
+            null,
+            2,
+          );
+        },
+      }),
+      memory_port_plan: tool({
+        description: "Plan non-conflicting host ports for compose services and optionally persist reservations",
+        args: {
+          project: tool.schema.string().min(1).optional(),
+          services: tool.schema
+            .array(
+              tool.schema.object({
+                name: tool.schema.string().min(1),
+                containerPort: tool.schema.number().int().min(1).max(65535),
+                preferredHostPort: tool.schema.number().int().min(1).max(65535).optional(),
+              }),
+            )
+            .min(1),
+          rangeStart: tool.schema.number().int().min(1).max(65535).default(20000),
+          rangeEnd: tool.schema.number().int().min(1).max(65535).default(39999),
+          persist: tool.schema.boolean().default(true),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
+          if (args.rangeStart > args.rangeEnd) {
+            return "Invalid range: rangeStart must be <= rangeEnd.";
+          }
+
+          const project = args.project?.trim() || deriveProjectScope(context.worktree);
+          const globalRecords = await state.store.list("global", 100000);
+          const reservations = parsePortReservations(globalRecords);
+
+          const assignments = await planPorts(
+            {
+              project,
+              services: args.services,
+              rangeStart: args.rangeStart,
+              rangeEnd: args.rangeEnd,
+              reservations,
+            },
+            isTcpPortAvailable,
+          );
+
+          let persisted = 0;
+          const warnings: string[] = [];
+
+          if (args.persist) {
+            const keyToOldIds = new Map<string, string[]>();
+            for (const reservation of reservations) {
+              const key = reservationKey(reservation.project, reservation.service, reservation.protocol);
+              if (!keyToOldIds.has(key)) {
+                keyToOldIds.set(key, []);
+              }
+              keyToOldIds.get(key)?.push(reservation.id);
+            }
+
+            for (const assignment of assignments) {
+              const key = reservationKey(assignment.project, assignment.service, assignment.protocol);
+              const oldIds = keyToOldIds.get(key) ?? [];
+              const text = `PORT_RESERVATION ${assignment.project} ${assignment.service} host=${assignment.hostPort} container=${assignment.containerPort} protocol=${assignment.protocol}`;
+              try {
+                const vector = await state.embedder.embed(text);
+                if (vector.length === 0) {
+                  warnings.push(`Skipped persistence for ${assignment.service}: empty embedding vector.`);
+                  continue;
+                }
+
+                await state.store.put({
+                  id: generateId(),
+                  text,
+                  vector,
+                  category: "entity",
+                  scope: "global",
+                  importance: 0.8,
+                  timestamp: Date.now(),
+                  schemaVersion: SCHEMA_VERSION,
+                  embeddingModel: state.config.embedding.model,
+                  vectorDim: vector.length,
+                  metadataJson: JSON.stringify({
+                    source: "port-plan",
+                    type: "port-reservation",
+                    project: assignment.project,
+                    service: assignment.service,
+                    hostPort: assignment.hostPort,
+                    containerPort: assignment.containerPort,
+                    protocol: assignment.protocol,
+                  }),
+                });
+
+                for (const id of oldIds) {
+                  await state.store.deleteById(id, ["global"]);
+                }
+                persisted += 1;
+              } catch (error) {
+                warnings.push(`Failed to persist ${assignment.service}: ${toErrorMessage(error)}`);
+              }
+            }
+          }
+
+          return JSON.stringify(
+            {
+              project,
+              persistRequested: args.persist,
+              persisted,
+              assignments,
+              warnings,
             },
             null,
             2,

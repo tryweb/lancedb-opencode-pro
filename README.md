@@ -208,6 +208,76 @@ Supported environment variables:
   - `memory_delete`
   - `memory_clear`
   - `memory_stats`
+  - `memory_port_plan`
+
+## Compose Port Planning (Cross-Project)
+
+Use `memory_port_plan` before writing `docker-compose.yml` to avoid host port collisions across projects on the same machine.
+
+- Reads existing reservations from `global` scope
+- Probes live host port availability
+- Returns non-conflicting assignments
+- Optionally persists reservations for future projects (`persist=true`)
+
+Example tool input:
+
+```json
+{
+  "project": "project-alpha",
+  "services": [
+    { "name": "web", "containerPort": 3000, "preferredHostPort": 23000 },
+    { "name": "api", "containerPort": 3001 }
+  ],
+  "rangeStart": 23000,
+  "rangeEnd": 23999,
+  "persist": true
+}
+```
+
+Example output (trimmed):
+
+```json
+{
+  "project": "project-alpha",
+  "persistRequested": true,
+  "persisted": 2,
+  "assignments": [
+    {
+      "project": "project-alpha",
+      "service": "web",
+      "hostPort": 23000,
+      "containerPort": 3000,
+      "protocol": "tcp"
+    },
+    {
+      "project": "project-alpha",
+      "service": "api",
+      "hostPort": 23001,
+      "containerPort": 3001,
+      "protocol": "tcp"
+    }
+  ],
+  "warnings": []
+}
+```
+
+Map assignments into `docker-compose.yml`:
+
+```yaml
+services:
+  web:
+    ports:
+      - "23000:3000"
+  api:
+    ports:
+      - "23001:3001"
+```
+
+Notes:
+
+- This is best-effort conflict avoidance, not a hard distributed lock.
+- For safer operation in automation, run planning immediately before `docker compose up`.
+- Reservations are upserted by `project + service + protocol` when `persist=true`.
 
 ## Local Development
 

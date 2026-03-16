@@ -185,6 +185,10 @@ function getRecentCount(statsOutput: string): number {
   return Number(JSON.parse(statsOutput).recentCount ?? 0);
 }
 
+function parseJson<T>(text: string): T {
+  return JSON.parse(text) as T;
+}
+
 test("auto-capture stores qualifying output with decision category and skips short output", async () => {
   const harness = await createPluginHarness({ minCaptureChars: 40 });
 
@@ -284,5 +288,107 @@ test("pruning keeps only the newest records within a scope", async () => {
     );
   } finally {
     await cleanupDbPath(dbPath);
+  }
+});
+
+test("memory_port_plan returns readable non-conflicting assignments", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    const output = await withPatchedFetch(() =>
+      harness.toolHooks.memory_port_plan.execute(
+        {
+          project: "project-alpha",
+          services: [
+            { name: "web", containerPort: 3000, preferredHostPort: 22080 },
+            { name: "api", containerPort: 3001 },
+          ],
+          rangeStart: 22080,
+          rangeEnd: 22090,
+          persist: false,
+        },
+        harness.context,
+      ),
+    );
+
+    const result = parseJson<{
+      project: string;
+      persisted: number;
+      assignments: Array<{ service: string; hostPort: number; containerPort: number; protocol: string }>;
+    }>(output);
+
+    assert.equal(result.project, "project-alpha");
+    assert.equal(result.persisted, 0);
+    assert.equal(result.assignments.length, 2);
+    assert.equal(new Set(result.assignments.map((item) => item.hostPort)).size, 2);
+    assert.equal(result.assignments[0]?.service, "web");
+    assert.equal(result.assignments[0]?.containerPort, 3000);
+    assert.equal(result.assignments[0]?.protocol, "tcp");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("memory_port_plan avoids reserved ports and upserts reservation records", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    const initialOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_port_plan.execute(
+        {
+          project: "project-alpha",
+          services: [{ name: "web", containerPort: 3000, preferredHostPort: 24080 }],
+          rangeStart: 24080,
+          rangeEnd: 24090,
+          persist: true,
+        },
+        harness.context,
+      ),
+    );
+    const initial = parseJson<{ assignments: Array<{ hostPort: number }> }>(initialOutput);
+    const reservedHostPort = initial.assignments[0]?.hostPort;
+    assert.equal(typeof reservedHostPort, "number");
+
+    const conflictedOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_port_plan.execute(
+        {
+          project: "project-beta",
+          services: [{ name: "api", containerPort: 3001, preferredHostPort: reservedHostPort }],
+          rangeStart: 24080,
+          rangeEnd: 24090,
+          persist: false,
+        },
+        harness.context,
+      ),
+    );
+
+    const conflicted = parseJson<{ assignments: Array<{ hostPort: number }> }>(conflictedOutput);
+    assert.equal(conflicted.assignments.length, 1);
+    assert.notEqual(conflicted.assignments[0]?.hostPort, reservedHostPort);
+
+    await withPatchedFetch(() =>
+      harness.toolHooks.memory_port_plan.execute(
+        {
+          project: "project-alpha",
+          services: [{ name: "web", containerPort: 3000, preferredHostPort: 24081 }],
+          rangeStart: 24080,
+          rangeEnd: 24090,
+          persist: true,
+        },
+        harness.context,
+      ),
+    );
+
+    const searchOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute(
+        { query: "PORT_RESERVATION project-alpha web", scope: "global", limit: 10 },
+        harness.context,
+      ),
+    );
+
+    assert.match(searchOutput, /host=24081/);
+    assert.doesNotMatch(searchOutput, /host=24080/);
+  } finally {
+    await harness.cleanup();
   }
 });
