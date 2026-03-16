@@ -2,6 +2,7 @@ import plugin from "../dist/index.js";
 
 const DB_PATH = "/tmp/opencode-memory-e2e";
 const SESSION_ID = "sess-e2e-001";
+const OLLAMA_BASE_URL = process.env.LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL || "http://192.168.11.206:11443";
 
 function makeClient() {
   const config = {
@@ -11,7 +12,7 @@ function makeClient() {
       embedding: {
         provider: "ollama",
         model: "nomic-embed-text",
-        baseUrl: "http://192.168.11.206:11434",
+        baseUrl: OLLAMA_BASE_URL,
       },
       retrieval: {
         mode: "hybrid",
