@@ -1,7 +1,20 @@
 stages:
+  - build
   - test
   - benchmark
   - release
+  - deploy
+  - review
+  - dast
+  - staging
+  - canary
+  - production
+  - incremental rollout 10%
+  - incremental rollout 25%
+  - incremental rollout 50%
+  - incremental rollout 100%
+  - performance
+  - cleanup
   - secret-detection
 
 include:
