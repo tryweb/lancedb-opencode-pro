@@ -16,7 +16,7 @@ const plugin: Plugin = async (input) => {
 
   const hooks: Hooks = {
     config: async (config) => {
-      state.config = resolveMemoryConfig(config);
+      state.config = resolveMemoryConfig(config, input.worktree);
       await state.ensureInitialized();
     },
     event: async ({ event }) => {
@@ -178,7 +178,7 @@ const plugin: Plugin = async (input) => {
 
 async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<RuntimeState> {
   const config = await readCurrentConfig(input.client);
-  const resolved = resolveMemoryConfig(config);
+  const resolved = resolveMemoryConfig(config, input.worktree);
   const embedder = new OllamaEmbedder(resolved.embedding);
   const store = new MemoryStore(resolved.dbPath);
 
@@ -319,7 +319,4 @@ interface RuntimeState {
 }
 
 export default plugin;
-export { resolveMemoryConfig } from "./config.js";
-export { MemoryStore } from "./store.js";
-export { deriveProjectScope, buildScopeFilter } from "./scope.js";
 export type { MemoryRuntimeConfig, MemoryRecord, SearchResult } from "./types.js";
