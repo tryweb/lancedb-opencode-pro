@@ -13,7 +13,9 @@ variables:
 .docker-compose-job:
   image: docker:27
   services:
-    - docker:27-dind
+    - name: docker:27-dind
+      alias: docker
+      command: ["--tls=false", "--host=tcp://0.0.0.0:2375"]
   before_script:
     - docker version
     - docker compose version
