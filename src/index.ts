@@ -8,7 +8,7 @@ import { extractCaptureCandidate } from "./extract.js";
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
-import type { MemoryRuntimeConfig } from "./types.js";
+import type { CaptureOutcome, CaptureSkipReason, MemoryRuntimeConfig } from "./types.js";
 import { generateId } from "./utils.js";
 
 const SCHEMA_VERSION = 1;
@@ -65,11 +65,25 @@ const plugin: Plugin = async (input) => {
         minScore: state.config.retrieval.minScore,
       });
 
+      await state.store.putEvent({
+        id: generateId(),
+        type: "recall",
+        scope: activeScope,
+        sessionID: eventInput.sessionID,
+        timestamp: Date.now(),
+        resultCount: results.length,
+        injected: results.length > 0,
+        metadataJson: JSON.stringify({
+          source: "system-transform",
+          includeGlobalScope: state.config.includeGlobalScope,
+        }),
+      });
+
       if (results.length === 0) return;
 
       const memoryBlock = [
         "[Memory Recall - optional historical context]",
-        ...results.map((item, index) => `${index + 1}. (${item.record.scope}) ${item.record.text}`),
+        ...results.map((item, index) => `${index + 1}. [${item.record.id}] (${item.record.scope}) ${item.record.text}`),
         "Use these as optional hints only; prioritize current user intent and current repo state.",
       ].join("\n");
 
@@ -179,6 +193,104 @@ const plugin: Plugin = async (input) => {
             null,
             2,
           );
+        },
+      }),
+      memory_feedback_missing: tool({
+        description: "Record feedback for memory that should have been stored",
+        args: {
+          text: tool.schema.string().min(1),
+          labels: tool.schema.array(tool.schema.string().min(1)).default([]),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          const scope = args.scope ?? deriveProjectScope(context.worktree);
+          await state.store.putEvent({
+            id: generateId(),
+            type: "feedback",
+            feedbackType: "missing",
+            scope,
+            sessionID: context.sessionID,
+            timestamp: Date.now(),
+            text: args.text,
+            labels: args.labels,
+            metadataJson: JSON.stringify({ source: "memory_feedback_missing" }),
+          });
+          return "Recorded missing-memory feedback.";
+        },
+      }),
+      memory_feedback_wrong: tool({
+        description: "Record feedback for memory that should not be stored",
+        args: {
+          id: tool.schema.string().min(6),
+          reason: tool.schema.string().optional(),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          const scope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(scope, state.config.includeGlobalScope);
+          const exists = await state.store.hasMemory(args.id, scopes);
+          if (!exists) {
+            return `Memory ${args.id} not found in current scope.`;
+          }
+          await state.store.putEvent({
+            id: generateId(),
+            type: "feedback",
+            feedbackType: "wrong",
+            scope,
+            sessionID: context.sessionID,
+            timestamp: Date.now(),
+            memoryId: args.id,
+            reason: args.reason,
+            metadataJson: JSON.stringify({ source: "memory_feedback_wrong" }),
+          });
+          return `Recorded wrong-memory feedback for ${args.id}.`;
+        },
+      }),
+      memory_feedback_useful: tool({
+        description: "Record whether a recalled memory was helpful",
+        args: {
+          id: tool.schema.string().min(6),
+          helpful: tool.schema.boolean(),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          const scope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(scope, state.config.includeGlobalScope);
+          const exists = await state.store.hasMemory(args.id, scopes);
+          if (!exists) {
+            return `Memory ${args.id} not found in current scope.`;
+          }
+          await state.store.putEvent({
+            id: generateId(),
+            type: "feedback",
+            feedbackType: "useful",
+            scope,
+            sessionID: context.sessionID,
+            timestamp: Date.now(),
+            memoryId: args.id,
+            helpful: args.helpful,
+            metadataJson: JSON.stringify({ source: "memory_feedback_useful" }),
+          });
+          return `Recorded recall usefulness feedback for ${args.id}.`;
+        },
+      }),
+      memory_effectiveness: tool({
+        description: "Show effectiveness metrics for capture recall and feedback",
+        args: {
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          const scope = args.scope ?? deriveProjectScope(context.worktree);
+          const summary = await state.store.summarizeEvents(scope, state.config.includeGlobalScope);
+          return JSON.stringify(summary, null, 2);
         },
       }),
       memory_port_plan: tool({
@@ -352,38 +464,79 @@ async function flushAutoCapture(
   client: { session: { get: (input: { path: { id: string } }) => Promise<unknown> } },
 ): Promise<void> {
   const fragments = state.captureBuffer.get(sessionID) ?? [];
-  if (fragments.length === 0) return;
+  if (fragments.length === 0) {
+    await recordCaptureEvent(state, {
+      sessionID,
+      scope: state.defaultScope,
+      outcome: "skipped",
+      skipReason: "empty-buffer",
+      text: "",
+    });
+    return;
+  }
   state.captureBuffer.delete(sessionID);
 
   const combined = fragments.join("\n").trim();
-  const candidate = extractCaptureCandidate(combined, state.config.minCaptureChars);
-  if (!candidate) return;
-
+  const activeScope = await resolveSessionScope(sessionID, client, state.defaultScope);
   await state.ensureInitialized();
-  if (!state.initialized) return;
+  if (!state.initialized) {
+    return;
+  }
+  await recordCaptureEvent(state, {
+    sessionID,
+    scope: activeScope,
+    outcome: "considered",
+    text: combined,
+  });
+
+  const result = extractCaptureCandidate(combined, state.config.minCaptureChars);
+  if (!result.candidate) {
+    await recordCaptureEvent(state, {
+      sessionID,
+      scope: activeScope,
+      outcome: "skipped",
+      skipReason: result.skipReason,
+      text: combined,
+    });
+    return;
+  }
 
   let vector: number[] = [];
   try {
-    vector = await state.embedder.embed(candidate.text);
+    vector = await state.embedder.embed(result.candidate.text);
   } catch (error) {
     console.warn(`[lancedb-opencode-pro] embedding unavailable during auto-capture: ${toErrorMessage(error)}`);
+    await recordCaptureEvent(state, {
+      sessionID,
+      scope: activeScope,
+      outcome: "skipped",
+      skipReason: "embedding-unavailable",
+      text: combined,
+    });
     vector = [];
   }
 
   if (vector.length === 0) {
     console.warn("[lancedb-opencode-pro] auto-capture skipped because embedding vector is empty");
+    await recordCaptureEvent(state, {
+      sessionID,
+      scope: activeScope,
+      outcome: "skipped",
+      skipReason: "empty-embedding",
+      text: combined,
+    });
     return;
   }
 
-  const activeScope = await resolveSessionScope(sessionID, client, state.defaultScope);
+  const memoryId = generateId();
 
   await state.store.put({
-    id: generateId(),
-    text: candidate.text,
+    id: memoryId,
+    text: result.candidate.text,
     vector,
-    category: candidate.category,
+    category: result.candidate.category,
     scope: activeScope,
-    importance: candidate.importance,
+    importance: result.candidate.importance,
     timestamp: Date.now(),
     schemaVersion: SCHEMA_VERSION,
     embeddingModel: state.config.embedding.model,
@@ -394,7 +547,41 @@ async function flushAutoCapture(
     }),
   });
 
+  await recordCaptureEvent(state, {
+    sessionID,
+    scope: activeScope,
+    outcome: "stored",
+    memoryId,
+    text: result.candidate.text,
+  });
+
   await state.store.pruneScope(activeScope, state.config.maxEntriesPerScope);
+}
+
+async function recordCaptureEvent(
+  state: RuntimeState,
+  input: {
+    sessionID: string;
+    scope: string;
+    outcome: CaptureOutcome;
+    skipReason?: CaptureSkipReason;
+    memoryId?: string;
+    text: string;
+  },
+): Promise<void> {
+  if (!state.initialized) return;
+  await state.store.putEvent({
+    id: generateId(),
+    type: "capture",
+    scope: input.scope,
+    sessionID: input.sessionID,
+    timestamp: Date.now(),
+    outcome: input.outcome,
+    skipReason: input.skipReason,
+    memoryId: input.memoryId,
+    text: input.text,
+    metadataJson: JSON.stringify({ source: "auto-capture" }),
+  });
 }
 
 async function resolveSessionScope(
@@ -448,4 +635,12 @@ function hasEmbeddingConfigChanged(current: MemoryRuntimeConfig["embedding"], ne
 }
 
 export default plugin;
-export type { MemoryRuntimeConfig, MemoryRecord, SearchResult } from "./types.js";
+export type {
+  EffectivenessSummary,
+  FeedbackEvent,
+  MemoryEffectivenessEvent,
+  MemoryRecord,
+  MemoryRuntimeConfig,
+  RecallEvent,
+  SearchResult,
+} from "./types.js";

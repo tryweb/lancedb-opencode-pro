@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { MemoryStore } from "../src/store.js";
-import type { MemoryCategory, MemoryRecord } from "../src/types.js";
+import type { EffectivenessSummary, MemoryCategory, MemoryEffectivenessEvent, MemoryRecord } from "../src/types.js";
 
 const DEFAULT_VECTOR_DIM = 384;
 const DEFAULT_EMBEDDING_MODEL = "test-embedding-model";
@@ -73,4 +73,92 @@ export function createScopedRecords(scope: string, count: number, category: Memo
       metadataJson: JSON.stringify({ scope, index }),
     }),
   );
+}
+
+export function createTestEvent(overrides: Partial<MemoryEffectivenessEvent> = {}): MemoryEffectivenessEvent {
+  const base = {
+    id: randomUUID(),
+    scope: "project:test",
+    sessionID: "sess-test",
+    timestamp: Date.now(),
+    metadataJson: "{}",
+  };
+
+  if (overrides.type === "recall") {
+    return {
+      id: overrides.id ?? base.id,
+      scope: overrides.scope ?? base.scope,
+      sessionID: overrides.sessionID ?? base.sessionID,
+      timestamp: overrides.timestamp ?? base.timestamp,
+      memoryId: overrides.memoryId,
+      text: overrides.text,
+      metadataJson: overrides.metadataJson ?? base.metadataJson,
+      type: "recall",
+      resultCount: overrides.resultCount ?? 1,
+      injected: overrides.injected ?? true,
+    };
+  }
+
+  if (overrides.type === "feedback") {
+    return {
+      id: overrides.id ?? base.id,
+      scope: overrides.scope ?? base.scope,
+      sessionID: overrides.sessionID ?? base.sessionID,
+      timestamp: overrides.timestamp ?? base.timestamp,
+      memoryId: overrides.memoryId,
+      text: overrides.text,
+      metadataJson: overrides.metadataJson ?? base.metadataJson,
+      type: "feedback",
+      feedbackType: overrides.feedbackType ?? "missing",
+      helpful: overrides.helpful,
+      labels: overrides.labels ?? [],
+      reason: overrides.reason,
+    };
+  }
+
+  return {
+    id: overrides.id ?? base.id,
+    scope: overrides.scope ?? base.scope,
+    sessionID: overrides.sessionID ?? base.sessionID,
+    timestamp: overrides.timestamp ?? base.timestamp,
+    memoryId: overrides.memoryId,
+    text: overrides.text ?? "Captured memory",
+    metadataJson: overrides.metadataJson ?? base.metadataJson,
+    type: "capture",
+    outcome: overrides.type === "capture" ? overrides.outcome ?? "stored" : "stored",
+    skipReason: overrides.type === "capture" ? overrides.skipReason : undefined,
+  };
+}
+
+export function createEffectivenessSummary(overrides: Partial<EffectivenessSummary> = {}): EffectivenessSummary {
+  return {
+    scope: "project:test",
+    totalEvents: 0,
+    capture: {
+      considered: 0,
+      stored: 0,
+      skipped: 0,
+      successRate: 0,
+      skipReasons: {},
+    },
+    recall: {
+      requested: 0,
+      injected: 0,
+      returnedResults: 0,
+      hitRate: 0,
+      injectionRate: 0,
+    },
+    feedback: {
+      missing: 0,
+      wrong: 0,
+      useful: {
+        positive: 0,
+        negative: 0,
+        helpfulRate: 0,
+      },
+      falsePositiveRate: 0,
+      falseNegativeRate: 0,
+    },
+    ...overrides,
+  };
 }

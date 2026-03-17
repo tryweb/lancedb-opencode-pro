@@ -4,6 +4,7 @@ import {
   assertRecordsMatch,
   cleanupDbPath,
   createScopedRecords,
+  createTestEvent,
   createTestRecord,
   createTestStore,
   createVector,
@@ -175,6 +176,67 @@ test("scope listing returns newest records first with deterministic limit handli
       [records[4].id, records[3].id, records[2].id],
     );
     assert.ok(listed.every((record, index, items) => index === 0 || items[index - 1].timestamp >= record.timestamp));
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("effectiveness events persist across scopes without leaking unrelated data", async () => {
+  const { store, dbPath } = await createTestStore();
+
+  try {
+    const scopeAEvents = [
+      createTestEvent({ id: "capture-a", type: "capture", scope: "project:repo-a", outcome: "stored", text: "repo-a capture" }),
+      createTestEvent({ id: "feedback-a", type: "feedback", scope: "project:repo-a", feedbackType: "wrong", memoryId: "mem-a" }),
+    ];
+    const scopeBEvents = [
+      createTestEvent({ id: "recall-b", type: "recall", scope: "project:repo-b", resultCount: 0, injected: false }),
+    ];
+
+    for (const event of [...scopeAEvents, ...scopeBEvents]) {
+      await store.putEvent(event);
+    }
+
+    const listA = await store.listEvents(["project:repo-a"], 10);
+    const listB = await store.listEvents(["project:repo-b"], 10);
+
+    assert.equal(listA.length, 2);
+    assert.equal(listB.length, 1);
+    assert.ok(listA.every((event) => event.scope === "project:repo-a"));
+    assert.ok(listB.every((event) => event.scope === "project:repo-b"));
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("effectiveness summary aggregates capture recall and feedback metrics", async () => {
+  const { store, dbPath } = await createTestStore();
+
+  try {
+    await store.putEvent(createTestEvent({ type: "capture", scope: "project:metrics", outcome: "considered", text: "candidate" }));
+    await store.putEvent(createTestEvent({ type: "capture", scope: "project:metrics", outcome: "stored", memoryId: "mem-1", text: "stored" }));
+    await store.putEvent(createTestEvent({ type: "capture", scope: "project:metrics", outcome: "skipped", skipReason: "below-min-chars", text: "short" }));
+    await store.putEvent(createTestEvent({ type: "recall", scope: "project:metrics", resultCount: 2, injected: true }));
+    await store.putEvent(createTestEvent({ type: "recall", scope: "project:metrics", resultCount: 0, injected: false }));
+    await store.putEvent(createTestEvent({ type: "feedback", scope: "project:metrics", feedbackType: "missing", text: "missing fact" }));
+    await store.putEvent(createTestEvent({ type: "feedback", scope: "project:metrics", feedbackType: "wrong", memoryId: "mem-1" }));
+    await store.putEvent(createTestEvent({ type: "feedback", scope: "project:metrics", feedbackType: "useful", memoryId: "mem-1", helpful: true }));
+    await store.putEvent(createTestEvent({ type: "feedback", scope: "project:metrics", feedbackType: "useful", memoryId: "mem-1", helpful: false }));
+
+    const summary = await store.summarizeEvents("project:metrics", false);
+
+    assert.equal(summary.totalEvents, 9);
+    assert.equal(summary.capture.considered, 1);
+    assert.equal(summary.capture.stored, 1);
+    assert.equal(summary.capture.skipped, 1);
+    assert.equal(summary.capture.skipReasons["below-min-chars"], 1);
+    assert.equal(summary.recall.requested, 2);
+    assert.equal(summary.recall.returnedResults, 1);
+    assert.equal(summary.recall.injected, 1);
+    assert.equal(summary.feedback.missing, 1);
+    assert.equal(summary.feedback.wrong, 1);
+    assert.equal(summary.feedback.useful.positive, 1);
+    assert.equal(summary.feedback.useful.negative, 1);
   } finally {
     await cleanupDbPath(dbPath);
   }

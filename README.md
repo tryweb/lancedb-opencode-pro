@@ -230,7 +230,73 @@ Supported environment variables:
   - `memory_delete`
   - `memory_clear`
   - `memory_stats`
+  - `memory_feedback_missing`
+  - `memory_feedback_wrong`
+  - `memory_feedback_useful`
+  - `memory_effectiveness`
   - `memory_port_plan`
+
+## Memory Effectiveness Feedback
+
+The provider can now record structured feedback about long-memory quality in addition to storing and recalling memories.
+
+- `memory_feedback_missing`: report information that should have been stored but was missed
+- `memory_feedback_wrong`: report a stored memory that should not have been kept
+- `memory_feedback_useful`: report whether a recalled memory was helpful
+- `memory_effectiveness`: return machine-readable capture, recall, and feedback metrics for the active scope
+
+Use `memory_search` or recalled memory ids from injected context when you need to reference a specific memory entry in feedback.
+
+### Viewing Metrics
+
+Use `memory_effectiveness` to inspect machine-readable effectiveness data for the active scope.
+
+```text
+memory_effectiveness
+```
+
+Example output:
+
+```json
+{
+  "scope": "project:my-project",
+  "totalEvents": 12,
+  "capture": {
+    "considered": 4,
+    "stored": 3,
+    "skipped": 1,
+    "successRate": 0.75,
+    "skipReasons": {
+      "below-min-chars": 1
+    }
+  },
+  "recall": {
+    "requested": 3,
+    "injected": 2,
+    "returnedResults": 2,
+    "hitRate": 0.67,
+    "injectionRate": 0.67
+  },
+  "feedback": {
+    "missing": 1,
+    "wrong": 0,
+    "useful": {
+      "positive": 2,
+      "negative": 0,
+      "helpfulRate": 1
+    },
+    "falsePositiveRate": 0,
+    "falseNegativeRate": 0.25
+  }
+}
+```
+
+Key fields:
+
+- `capture.successRate`: how often a considered candidate was stored.
+- `recall.hitRate`: how often a recall request returned at least one result.
+- `feedback.falsePositiveRate`: wrong-memory reports divided by stored memories.
+- `feedback.falseNegativeRate`: missing-memory reports relative to capture attempts.
 
 ## OpenAI Embedding Configuration
 
@@ -362,9 +428,10 @@ The project provides layered validation workflows that can run locally or inside
 |---|---|
 | `npm run test:foundation` | Write-read persistence, scope isolation, vector compatibility, timestamp ordering |
 | `npm run test:regression` | Auto-capture extraction, search output shape, delete/clear safety, pruning |
+| `npm run test:effectiveness` | Foundation + regression workflows covering effectiveness events, feedback commands, and summary output |
 | `npm run test:retrieval` | Recall@K and Robustness-δ@K against synthetic fixtures |
 | `npm run benchmark:latency` | Search p50/p99, insert avg, list avg with hard-gate enforcement |
-| `npm run verify` | Typecheck + build + foundation + regression + retrieval (quick release check) |
+| `npm run verify` | Typecheck + build + effectiveness workflow + retrieval (quick release check) |
 | `npm run verify:full` | All of the above + benchmark + `npm pack` (full release gate) |
 
 Threshold policy and benchmark profiles are documented in `docs/benchmark-thresholds.md`.

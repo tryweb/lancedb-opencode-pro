@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { MemoryRecord, SearchResult } from "./types.js";
+import type { CaptureSkipReason, EffectivenessSummary, MemoryEffectivenessEvent, MemoryRecord, SearchResult } from "./types.js";
 import { cosineSimilarity, tokenize } from "./utils.js";
 
 type LanceModule = typeof import("@lancedb/lancedb");
@@ -23,6 +23,7 @@ type LanceTable = {
 };
 
 const TABLE_NAME = "memories";
+const EVENTS_TABLE_NAME = "effectiveness_events";
 
 interface ScopeCache {
   records: MemoryRecord[];
@@ -35,6 +36,7 @@ export class MemoryStore {
   private lancedb: LanceModule | null = null;
   private connection: LanceConnection | null = null;
   private table: LanceTable | null = null;
+  private eventTable: LanceTable | null = null;
   private indexState = {
     vector: false,
     fts: false,
@@ -71,6 +73,31 @@ export class MemoryStore {
       await this.table.delete("id = '__bootstrap__'");
     }
 
+    try {
+      this.eventTable = await this.connection.openTable(EVENTS_TABLE_NAME);
+    } catch {
+      const bootstrapEvent = {
+        id: "__bootstrap__",
+        type: "capture",
+        scope: "global",
+        sessionID: "",
+        timestamp: 0,
+        memoryId: "",
+        text: "",
+        outcome: "considered",
+        skipReason: "",
+        resultCount: 0,
+        injected: false,
+        feedbackType: "",
+        helpful: -1,
+        reason: "",
+        labelsJson: "[]",
+        metadataJson: "{}",
+      };
+      this.eventTable = await this.connection.createTable(EVENTS_TABLE_NAME, [bootstrapEvent]);
+      await this.eventTable.delete("id = '__bootstrap__'");
+    }
+
     await this.ensureIndexes();
   }
 
@@ -78,6 +105,29 @@ export class MemoryStore {
     const table = this.requireTable();
     await table.add([record]);
     this.invalidateScope(record.scope);
+  }
+
+  async putEvent(event: MemoryEffectivenessEvent): Promise<void> {
+    await this.requireEventTable().add([
+      {
+        id: event.id,
+        type: event.type,
+        scope: event.scope,
+        sessionID: event.sessionID ?? "",
+        timestamp: event.timestamp,
+        memoryId: event.memoryId ?? "",
+        text: event.text ?? "",
+        outcome: event.type === "capture" ? event.outcome : "",
+        skipReason: event.type === "capture" ? event.skipReason ?? "" : "",
+        resultCount: event.type === "recall" ? event.resultCount : 0,
+        injected: event.type === "recall" ? event.injected : false,
+        feedbackType: event.type === "feedback" ? event.feedbackType : "",
+        helpful: event.type === "feedback" ? (event.helpful === undefined ? -1 : event.helpful ? 1 : 0) : -1,
+        reason: event.type === "feedback" ? event.reason ?? "" : "",
+        labelsJson: event.type === "feedback" ? JSON.stringify(event.labels ?? []) : "[]",
+        metadataJson: event.metadataJson,
+      },
+    ]);
   }
 
   async search(params: {
@@ -150,6 +200,94 @@ export class MemoryStore {
     return rows.filter((row) => row.vectorDim !== expectedDim).length;
   }
 
+  async hasMemory(id: string, scopes: string[]): Promise<boolean> {
+    const rows = await this.readByScopes(scopes);
+    return rows.some((row) => row.id === id);
+  }
+
+  async listEvents(scopes: string[], limit: number): Promise<MemoryEffectivenessEvent[]> {
+    const rows = await this.readEventsByScopes(scopes);
+    return rows.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  }
+
+  async summarizeEvents(scope: string, includeGlobalScope: boolean): Promise<EffectivenessSummary> {
+    const scopes = includeGlobalScope && scope !== "global" ? [scope, "global"] : [scope];
+    const events = await this.readEventsByScopes(scopes);
+
+    const captureSkipReasons: Partial<Record<CaptureSkipReason, number>> = {};
+    let captureConsidered = 0;
+    let captureStored = 0;
+    let captureSkipped = 0;
+    let recallRequested = 0;
+    let recallInjected = 0;
+    let recallReturnedResults = 0;
+    let feedbackMissing = 0;
+    let feedbackWrong = 0;
+    let feedbackUsefulPositive = 0;
+    let feedbackUsefulNegative = 0;
+
+    for (const event of events) {
+      if (event.type === "capture") {
+        if (event.outcome === "considered") captureConsidered += 1;
+        if (event.outcome === "stored") captureStored += 1;
+        if (event.outcome === "skipped") {
+          captureSkipped += 1;
+          if (event.skipReason) {
+            captureSkipReasons[event.skipReason] = (captureSkipReasons[event.skipReason] ?? 0) + 1;
+          }
+        }
+      }
+
+      if (event.type === "recall") {
+        recallRequested += 1;
+        if (event.resultCount > 0) recallReturnedResults += 1;
+        if (event.injected) recallInjected += 1;
+      }
+
+      if (event.type === "feedback") {
+        if (event.feedbackType === "missing") feedbackMissing += 1;
+        if (event.feedbackType === "wrong") feedbackWrong += 1;
+        if (event.feedbackType === "useful") {
+          if (event.helpful) feedbackUsefulPositive += 1;
+          else feedbackUsefulNegative += 1;
+        }
+      }
+    }
+
+    const totalCaptureAttempts = captureStored + captureSkipped;
+    const totalUsefulFeedback = feedbackUsefulPositive + feedbackUsefulNegative;
+
+    return {
+      scope,
+      totalEvents: events.length,
+      capture: {
+        considered: captureConsidered,
+        stored: captureStored,
+        skipped: captureSkipped,
+        successRate: totalCaptureAttempts === 0 ? 0 : captureStored / totalCaptureAttempts,
+        skipReasons: captureSkipReasons,
+      },
+      recall: {
+        requested: recallRequested,
+        injected: recallInjected,
+        returnedResults: recallReturnedResults,
+        hitRate: recallRequested === 0 ? 0 : recallReturnedResults / recallRequested,
+        injectionRate: recallRequested === 0 ? 0 : recallInjected / recallRequested,
+      },
+      feedback: {
+        missing: feedbackMissing,
+        wrong: feedbackWrong,
+        useful: {
+          positive: feedbackUsefulPositive,
+          negative: feedbackUsefulNegative,
+          helpfulRate: totalUsefulFeedback === 0 ? 0 : feedbackUsefulPositive / totalUsefulFeedback,
+        },
+        falsePositiveRate: captureStored === 0 ? 0 : feedbackWrong / captureStored,
+        falseNegativeRate: totalCaptureAttempts === 0 ? 0 : feedbackMissing / totalCaptureAttempts,
+      },
+    };
+  }
+
   getIndexHealth(): { vector: boolean; fts: boolean; ftsError?: string } {
     return {
       vector: this.indexState.vector,
@@ -199,6 +337,46 @@ export class MemoryStore {
       throw new Error("MemoryStore is not initialized");
     }
     return this.table;
+  }
+
+  private requireEventTable(): LanceTable {
+    if (!this.eventTable) {
+      throw new Error("MemoryStore event table is not initialized");
+    }
+    return this.eventTable;
+  }
+
+  private async readEventsByScopes(scopes: string[]): Promise<MemoryEffectivenessEvent[]> {
+    const table = this.requireEventTable();
+    if (scopes.length === 0) return [];
+    const whereExpr = scopes.map((scope) => `scope = '${escapeSql(scope)}'`).join(" OR ");
+    const rows = await table
+      .query()
+      .where(`(${whereExpr})`)
+      .select([
+        "id",
+        "type",
+        "scope",
+        "sessionID",
+        "timestamp",
+        "memoryId",
+        "text",
+        "outcome",
+        "skipReason",
+        "resultCount",
+        "injected",
+        "feedbackType",
+        "helpful",
+        "reason",
+        "labelsJson",
+        "metadataJson",
+      ])
+      .limit(100000)
+      .toArray();
+
+    return rows
+      .map((row) => normalizeEventRow(row))
+      .filter((row): row is MemoryEffectivenessEvent => row !== null);
   }
 
   private async readByScopes(scopes: string[]): Promise<MemoryRecord[]> {
@@ -278,6 +456,58 @@ function normalizeRow(row: Record<string, unknown>): MemoryRecord | null {
     vectorDim: Number(row.vectorDim ?? vector.length),
     metadataJson: String(row.metadataJson ?? "{}"),
   };
+}
+
+function normalizeEventRow(row: Record<string, unknown>): MemoryEffectivenessEvent | null {
+  if (typeof row.id !== "string" || typeof row.type !== "string" || typeof row.scope !== "string") {
+    return null;
+  }
+
+  const base = {
+    id: row.id,
+    scope: row.scope,
+    sessionID: typeof row.sessionID === "string" && row.sessionID.length > 0 ? row.sessionID : undefined,
+    timestamp: Number(row.timestamp ?? Date.now()),
+    memoryId: typeof row.memoryId === "string" && row.memoryId.length > 0 ? row.memoryId : undefined,
+    text: typeof row.text === "string" && row.text.length > 0 ? row.text : undefined,
+    metadataJson: String(row.metadataJson ?? "{}"),
+  };
+
+  if (row.type === "capture") {
+    return {
+      ...base,
+      type: "capture",
+      outcome: row.outcome === "stored" || row.outcome === "skipped" ? row.outcome : "considered",
+      skipReason: typeof row.skipReason === "string" && row.skipReason.length > 0
+        ? row.skipReason as CaptureSkipReason
+        : undefined,
+    };
+  }
+
+  if (row.type === "recall") {
+    return {
+      ...base,
+      type: "recall",
+      resultCount: Number(row.resultCount ?? 0),
+      injected: Boolean(row.injected),
+    };
+  }
+
+  if (row.type === "feedback") {
+    const labelsJson = typeof row.labelsJson === "string" ? row.labelsJson : "[]";
+    const labels = JSON.parse(labelsJson) as string[];
+    const helpfulValue = Number(row.helpful ?? -1);
+    return {
+      ...base,
+      type: "feedback",
+      feedbackType: row.feedbackType === "missing" || row.feedbackType === "wrong" ? row.feedbackType : "useful",
+      helpful: helpfulValue < 0 ? undefined : helpfulValue === 1,
+      labels: Array.isArray(labels) ? labels.filter((item): item is string => typeof item === "string") : [],
+      reason: typeof row.reason === "string" && row.reason.length > 0 ? row.reason : undefined,
+    };
+  }
+
+  return null;
 }
 
 function escapeSql(value: string): string {

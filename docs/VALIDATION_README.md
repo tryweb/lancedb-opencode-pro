@@ -106,6 +106,14 @@ Documentation & error messages
 | Insert latency | < 50ms | 4.1 | Throughput |
 | Disk usage (10K records) | < 50MB | 4.2 | Storage efficiency |
 
+### Effectiveness Metrics
+| Metric | Target | Phase | Reference |
+|--------|--------|-------|-----------|
+| Capture success rate | Reported | 7 | Effectiveness summary |
+| Recall hit rate | Reported | 7 | Effectiveness summary |
+| Helpful recall rate | Reported | 7 | User feedback |
+| False-positive / false-negative counts | Reported | 7 | User feedback |
+
 ---
 
 ## 🔍 Critical Tests (Must Pass Before Release)
@@ -200,6 +208,9 @@ npm test -- --coverage
 # Run benchmarks
 npm run benchmark:latency
 
+# Run effectiveness workflow
+npm run test:effectiveness
+
 # Clean test data
 rm -rf /tmp/test-memory
 ```
@@ -213,6 +224,7 @@ rm -rf /tmp/test-memory
 - [ ] All Phase 1.1 tests pass (retrieval quality)
 - [ ] All Phase 2.1 tests pass (scope isolation)
 - [ ] All Phase 3 tests pass (regression)
+- [ ] Effectiveness summary workflow passes and reports capture/recall/feedback metrics
 - [ ] Phase 4.1 latency benchmarks pass
 - [ ] Phase 6.1 edge cases handled
 - [ ] Error messages are clear & actionable
@@ -343,4 +355,3 @@ VALIDATION_README.md (you are here)
 - **"What are all the requirements?"** → `memory-validation-checklist.md`
 - **"How do I write the tests?"** → `test-implementation-guide.md`
 - **"How do I navigate?"** → `VALIDATION_README.md` (this file)
-

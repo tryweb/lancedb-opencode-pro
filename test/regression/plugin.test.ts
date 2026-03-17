@@ -165,6 +165,7 @@ async function createPluginHarness(options?: {
   assert.ok(hooks?.tool, "tool hooks should exist");
   assert.ok(hooks?.event, "event hook should exist");
   assert.ok(hooks?.["experimental.text.complete"], "text complete hook should exist");
+  assert.ok(hooks?.["experimental.chat.system.transform"], "system transform hook should exist");
   if (hooks.config) {
     await hooks.config(memoryConfig as unknown as Parameters<NonNullable<typeof hooks.config>>[0]);
   }
@@ -172,6 +173,7 @@ async function createPluginHarness(options?: {
   const toolHooks = hooks.tool;
   const eventHook = hooks.event;
   const textCompleteHook = hooks["experimental.text.complete"];
+  const systemTransformHook = hooks["experimental.chat.system.transform"];
 
   const context = {
     sessionID: SESSION_ID,
@@ -199,12 +201,25 @@ async function createPluginHarness(options?: {
     });
   }
 
+  async function recallSystem(): Promise<string[]> {
+    return withPatchedFetch(async () => {
+      const output = { system: [] as string[] };
+      const input = {
+        sessionID: SESSION_ID,
+        model: { id: "test-model", name: "test-model", providerID: "test-provider" },
+      } as Parameters<NonNullable<typeof systemTransformHook>>[0];
+      await systemTransformHook(input, output as Parameters<NonNullable<typeof systemTransformHook>>[1]);
+      return output.system;
+    });
+  }
+
   return {
     hooks,
     toolHooks,
     dbPath,
     context,
     capture,
+    recallSystem,
     async cleanup() {
       await cleanupDbPath(dbPath);
     },
@@ -389,6 +404,100 @@ test("memory_delete and memory_clear reject destructive operations without confi
       harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
     );
     assert.match(searchAfterRejections, new RegExp(ensuredRecordId));
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("capture events record stored and skipped outcomes with normalized reasons", async () => {
+  const harness = await createPluginHarness({ minCaptureChars: 40 });
+
+  try {
+    await harness.capture("Short fixed note.");
+    await harness.capture("We decided to keep the queue disabled because the retry storm is now fixed successfully.");
+
+    const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
+    const summary = parseJson<{
+      capture: {
+        considered: number;
+        stored: number;
+        skipped: number;
+        skipReasons: Record<string, number>;
+      };
+    }>(summaryOutput);
+
+    assert.equal(summary.capture.considered, 2);
+    assert.equal(summary.capture.stored, 1);
+    assert.equal(summary.capture.skipped, 1);
+    assert.equal(summary.capture.skipReasons["below-min-chars"], 1);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("recall injection includes memory ids and records recall effectiveness events", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    await harness.capture("Nginx 502 fixed by increasing proxy_buffer_size and confirming upstream health checks. Resolved successfully.");
+    const recalled = await harness.recallSystem();
+
+    assert.equal(recalled.length, 1);
+    assert.match(recalled[0] ?? "", /\[Memory Recall - optional historical context\]/);
+    assert.match(recalled[0] ?? "", /\[[^\]]+\] \([^)]*\) /);
+
+    const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
+    const summary = parseJson<{ recall: { requested: number; injected: number; returnedResults: number } }>(summaryOutput);
+
+    assert.equal(summary.recall.requested, 1);
+    assert.equal(summary.recall.injected, 1);
+    assert.equal(summary.recall.returnedResults, 1);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("feedback commands persist missing wrong and useful signals", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    await harness.capture("Resolved successfully after rotating the stale token and reloading the API gateway config.");
+    const searchOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
+    );
+    const recordId = searchOutput.match(/\[([^\]]+)\]/)?.[1] ?? "";
+
+    const missingOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_feedback_missing.execute(
+        { text: "Remember that this project prefers blue-green deploys.", labels: ["preference"] },
+        harness.context,
+      ),
+    );
+    assert.match(missingOutput, /Recorded missing-memory feedback/);
+
+    const wrongOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_feedback_wrong.execute({ id: recordId, reason: "temporary workaround" }, harness.context),
+    );
+    assert.match(wrongOutput, new RegExp(recordId));
+
+    const usefulOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_feedback_useful.execute({ id: recordId, helpful: true }, harness.context),
+    );
+    assert.match(usefulOutput, new RegExp(recordId));
+
+    const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
+    const summary = parseJson<{
+      feedback: {
+        missing: number;
+        wrong: number;
+        useful: { positive: number; negative: number };
+      };
+    }>(summaryOutput);
+
+    assert.equal(summary.feedback.missing, 1);
+    assert.equal(summary.feedback.wrong, 1);
+    assert.equal(summary.feedback.useful.positive, 1);
+    assert.equal(summary.feedback.useful.negative, 0);
   } finally {
     await harness.cleanup();
   }

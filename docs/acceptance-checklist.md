@@ -15,6 +15,13 @@
 - [ ] Missing FTS index does not break retrieval.
 - [ ] Missing embedding backend does not crash plugin hooks.
 
+## Effectiveness Feedback
+
+- [ ] Users can report missing memory that should have been stored.
+- [ ] Users can report stored memory that should not have been kept.
+- [ ] Users can report whether recalled memory was helpful.
+- [ ] Operators can inspect machine-readable effectiveness summary output.
+
 ## Build And Packaging
 
 - [ ] `docker compose build --no-cache && docker compose up -d` succeeds.
