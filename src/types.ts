@@ -1,4 +1,4 @@
-export type EmbeddingProvider = "ollama";
+export type EmbeddingProvider = "ollama" | "openai";
 
 export type RetrievalMode = "hybrid" | "vector";
 
@@ -8,6 +8,7 @@ export interface EmbeddingConfig {
   provider: EmbeddingProvider;
   model: string;
   baseUrl?: string;
+  apiKey?: string;
   timeoutMs?: number;
 }
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveMemoryConfig } from "../../src/config.js";
 import plugin from "../../src/index.js";
 import { cleanupDbPath, createScopedRecords, createTempDbPath, createTestStore, createVector } from "../setup.js";
 
@@ -17,8 +18,25 @@ function makeEmbedding(prompt: string, dim = 384): number[] {
 
 function createFetchMock() {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    const body = typeof init?.body === "string" ? JSON.parse(init.body) as { prompt?: string } : {};
-    const prompt = body.prompt ?? String(input);
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) as { prompt?: string; input?: string | string[] } : {};
+    const url = typeof input === "string" ? input : input instanceof URL ? String(input) : input.url;
+    const textInput = Array.isArray(body.input) ? body.input[0] : body.input;
+    const prompt = body.prompt ?? textInput ?? url;
+
+    if (url.includes("/api/embeddings")) {
+      return new Response(JSON.stringify({ embedding: makeEmbedding(prompt) }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    if (url.includes("/embeddings")) {
+      return new Response(JSON.stringify({ data: [{ embedding: makeEmbedding(prompt, 1536) }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ embedding: makeEmbedding(prompt) }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -61,16 +79,19 @@ async function createPluginHarness(options?: {
   maxEntriesPerScope?: number;
   userMessages?: SessionMessage[];
   sessionDirectory?: string;
+  embeddingProvider?: "ollama" | "openai";
 }) {
+  const embeddingProvider = options?.embeddingProvider ?? "ollama";
   const dbPath = await createTempDbPath("lancedb-opencode-pro-regression-");
   const memoryConfig = {
     memory: {
       provider: "lancedb-opencode-pro",
       dbPath,
       embedding: {
-        provider: "ollama" as const,
-        model: "all-minilm",
-        baseUrl: "http://127.0.0.1:11434",
+        provider: embeddingProvider,
+        model: embeddingProvider === "openai" ? "text-embedding-3-small" : "all-minilm",
+        baseUrl: embeddingProvider === "openai" ? "https://api.openai.com/v1" : "http://127.0.0.1:11434",
+        ...(embeddingProvider === "openai" ? { apiKey: "test-openai-api-key" } : {}),
       },
       retrieval: {
         mode: "hybrid" as const,
@@ -90,15 +111,24 @@ async function createPluginHarness(options?: {
     },
   ];
   const sessionDirectory = options?.sessionDirectory ?? WORKTREE;
+  const envValues: Record<string, string> = {
+    LANCEDB_OPENCODE_PRO_DB_PATH: dbPath,
+    LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS: String(memoryConfig.memory.minCaptureChars),
+    LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE: String(memoryConfig.memory.maxEntriesPerScope),
+    LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER: memoryConfig.memory.embedding.provider,
+    LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL: memoryConfig.memory.embedding.model,
+  };
+
+  if (embeddingProvider === "openai") {
+    envValues.LANCEDB_OPENCODE_PRO_OPENAI_API_KEY = "test-openai-api-key";
+    envValues.LANCEDB_OPENCODE_PRO_OPENAI_BASE_URL = memoryConfig.memory.embedding.baseUrl;
+    envValues.LANCEDB_OPENCODE_PRO_OPENAI_MODEL = memoryConfig.memory.embedding.model;
+  } else {
+    envValues.LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL = memoryConfig.memory.embedding.baseUrl;
+  }
 
   const hooks = await withPatchedEnv(
-    {
-      LANCEDB_OPENCODE_PRO_DB_PATH: dbPath,
-      LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL: memoryConfig.memory.embedding.model,
-      LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL: memoryConfig.memory.embedding.baseUrl,
-      LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS: String(memoryConfig.memory.minCaptureChars),
-      LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE: String(memoryConfig.memory.maxEntriesPerScope),
-    },
+    envValues,
     () => withPatchedFetch(async () =>
       plugin({
       client: {
@@ -202,7 +232,7 @@ test("auto-capture stores qualifying output with decision category and skips sho
       harness.toolHooks.memory_search.execute({ query: "Postgres migration design", limit: 5 }, harness.context),
     );
 
-    assert.match(searchOutput, /^1\. \[[^\]]+\] \([^\)]+\) /m);
+    assert.match(searchOutput, /^1\. \[[^\]]+\] \([^)]*\) /m);
     assert.match(searchOutput, /Postgres/);
 
     const statsOutput = await withPatchedFetch(() => harness.toolHooks.memory_stats.execute({}, harness.context));
@@ -223,11 +253,110 @@ test("memory_search returns ranked entries with stable identifiers and readable 
 
     const lines = searchOutput.split("\n");
     assert.ok(lines.length >= 1);
-    assert.match(lines[0], /^1\. \[[^\]]+\] \([^\)]+\) .+ \[\d+%\]$/);
+    assert.match(lines[0], /^1\. \[[^\]]+\] \([^)]*\) .+ \[\d+%\]$/);
     assert.match(searchOutput, /proxy_buffer_size|Nginx 502/);
   } finally {
     await harness.cleanup();
   }
+});
+
+test("openai provider path captures and recalls memory with the same tool surface", async () => {
+  const harness = await createPluginHarness({ embeddingProvider: "openai" });
+
+  try {
+    await harness.capture(
+      "OpenAI path resolved successfully: rotate token and flush upstream cache to resolve 401 storms.",
+    );
+    const searchOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute({ query: "rotate token upstream cache 401", limit: 5 }, harness.context),
+    );
+
+    assert.match(searchOutput, /^1\. \[[^\]]+\] \([^)]*\) /m);
+    assert.match(searchOutput, /rotate token|upstream cache|401/);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("resolveMemoryConfig fails fast for openai without apiKey", () => {
+  assert.throws(
+    () =>
+      resolveMemoryConfig(
+        {
+          memory: {
+            provider: "lancedb-opencode-pro",
+            embedding: {
+              provider: "openai",
+              model: "text-embedding-3-small",
+            },
+          },
+        } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+        undefined,
+      ),
+    /requires apiKey/i,
+  );
+});
+
+test("resolveMemoryConfig fails fast for openai without model", () => {
+  assert.throws(
+    () =>
+      resolveMemoryConfig(
+        {
+          memory: {
+            provider: "lancedb-opencode-pro",
+            embedding: {
+              provider: "openai",
+              apiKey: "test-openai-api-key",
+            },
+          },
+        } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+        undefined,
+      ),
+    /requires model/i,
+  );
+});
+
+test("environment overrides can switch embedding provider to openai", async () => {
+  await withPatchedEnv(
+    {
+      LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER: "openai",
+      LANCEDB_OPENCODE_PRO_OPENAI_API_KEY: "env-openai-key",
+      LANCEDB_OPENCODE_PRO_OPENAI_MODEL: "text-embedding-3-small",
+    },
+    async () => {
+      const resolved = resolveMemoryConfig(
+        {
+          memory: {
+            provider: "lancedb-opencode-pro",
+            embedding: {
+              provider: "ollama",
+              model: "all-minilm",
+              baseUrl: "http://127.0.0.1:11434",
+            },
+          },
+        } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+        undefined,
+      );
+
+      assert.equal(resolved.embedding.provider, "openai");
+      assert.equal(resolved.embedding.model, "text-embedding-3-small");
+      assert.equal(resolved.embedding.apiKey, "env-openai-key");
+    },
+  );
+});
+
+test("resolveMemoryConfig rejects invalid embedding provider values", async () => {
+  await withPatchedEnv(
+    {
+      LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER: "azure",
+    },
+    async () => {
+      assert.throws(
+        () => resolveMemoryConfig(undefined, undefined),
+        /Invalid embedding provider/i,
+      );
+    },
+  );
 });
 
 test("memory_delete and memory_clear reject destructive operations without confirmation", async () => {
@@ -240,9 +369,10 @@ test("memory_delete and memory_clear reject destructive operations without confi
     );
     const recordId = searchOutput.match(/\[([^\]]+)\]/)?.[1];
     assert.ok(recordId);
+    const ensuredRecordId = recordId ?? "";
 
     const deleteRejected = await withPatchedFetch(() =>
-      harness.toolHooks.memory_delete.execute({ id: recordId!, confirm: false }, harness.context),
+      harness.toolHooks.memory_delete.execute({ id: ensuredRecordId, confirm: false }, harness.context),
     );
     assert.match(deleteRejected, /confirm=true/);
 
@@ -258,7 +388,7 @@ test("memory_delete and memory_clear reject destructive operations without confi
     const searchAfterRejections = await withPatchedFetch(() =>
       harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
     );
-    assert.match(searchAfterRejections, new RegExp(recordId!));
+    assert.match(searchAfterRejections, new RegExp(ensuredRecordId));
   } finally {
     await harness.cleanup();
   }

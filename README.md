@@ -203,9 +203,14 @@ Supported environment variables:
 
 - `LANCEDB_OPENCODE_PRO_CONFIG_PATH`
 - `LANCEDB_OPENCODE_PRO_PROVIDER`
+- `LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER` (`ollama` or `openai`, default `ollama`)
 - `LANCEDB_OPENCODE_PRO_DB_PATH`
 - `LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL`
 - `LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL`
+- `LANCEDB_OPENCODE_PRO_OPENAI_API_KEY`
+- `LANCEDB_OPENCODE_PRO_OPENAI_MODEL`
+- `LANCEDB_OPENCODE_PRO_OPENAI_BASE_URL`
+- `LANCEDB_OPENCODE_PRO_OPENAI_TIMEOUT_MS`
 - `LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS`
 - `LANCEDB_OPENCODE_PRO_RETRIEVAL_MODE`
 - `LANCEDB_OPENCODE_PRO_VECTOR_WEIGHT`
@@ -226,6 +231,51 @@ Supported environment variables:
   - `memory_clear`
   - `memory_stats`
   - `memory_port_plan`
+
+## OpenAI Embedding Configuration
+
+Default behavior stays on Ollama. To use OpenAI embeddings, set `embedding.provider` to `openai` and provide API key + model.
+
+Example sidecar:
+
+```json
+{
+  "provider": "lancedb-opencode-pro",
+  "dbPath": "~/.opencode/memory/lancedb",
+  "embedding": {
+    "provider": "openai",
+    "model": "text-embedding-3-small",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "sk-your-openai-key"
+  },
+  "retrieval": {
+    "mode": "hybrid",
+    "vectorWeight": 0.7,
+    "bm25Weight": 0.3,
+    "minScore": 0.2
+  },
+  "includeGlobalScope": true,
+  "minCaptureChars": 80,
+  "maxEntriesPerScope": 3000
+}
+```
+
+Recommended env overrides for OpenAI:
+
+```bash
+export LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER="openai"
+export LANCEDB_OPENCODE_PRO_OPENAI_API_KEY="$OPENAI_API_KEY"
+export LANCEDB_OPENCODE_PRO_OPENAI_MODEL="text-embedding-3-small"
+export LANCEDB_OPENCODE_PRO_OPENAI_BASE_URL="https://api.openai.com/v1"
+```
+
+`lancedb-opencode-pro.json` is parsed as plain JSON, so `${...}` interpolation is not performed. Prefer environment variables for secrets.
+
+Validation behavior:
+
+- If `embedding.provider=openai` and API key is missing, initialization fails with an explicit configuration error.
+- If `embedding.provider=openai` and model is missing, initialization fails with an explicit configuration error.
+- Ollama remains the default provider when `embedding.provider` is omitted.
 
 ## Compose Port Planning (Cross-Project)
 
@@ -511,5 +561,5 @@ Treat the feature as verified only when all of these are true:
 ## Notes
 
 - Default storage path: `~/.opencode/memory/lancedb`
-- Embedding backend in v1: `ollama`
+- Embedding provider defaults to `ollama`; `openai` is supported via `embedding.provider=openai`
 - The provider keeps schema metadata (`schemaVersion`, `embeddingModel`, `vectorDim`) to guard against unsafe vector mixing.
