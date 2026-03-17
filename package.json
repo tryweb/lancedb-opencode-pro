@@ -4,10 +4,18 @@
   "description": "LanceDB-backed long-term memory provider for OpenCode",
   "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "types": "dist/index.d.ts",
+  "sideEffects": false,
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "keywords": [
     "opencode",
@@ -15,7 +23,22 @@
     "memory",
     "lancedb"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tryweb/lancedb-opencode-pro.git"
+  },
+  "homepage": "https://github.com/tryweb/lancedb-opencode-pro",
+  "bugs": {
+    "url": "https://github.com/tryweb/lancedb-opencode-pro/issues"
+  },
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:test": "tsc -p tsconfig.test.json",
@@ -27,7 +50,9 @@
     "benchmark:latency": "npm run build:test && node dist-test/test/benchmark/latency.js",
     "test:e2e": "node scripts/e2e-opencode-memory.mjs",
     "verify": "npm run typecheck && npm run build && npm run test:foundation && npm run test:regression && npm run test:retrieval",
-    "verify:full": "npm run verify && npm run benchmark:latency && npm pack"
+    "verify:full": "npm run verify && npm run benchmark:latency && npm pack",
+    "release:check": "npm run verify:full && npm publish --dry-run",
+    "prepublishOnly": "npm run verify:full"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.26.2",

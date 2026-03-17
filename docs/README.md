@@ -4,6 +4,15 @@ This directory contains comprehensive analysis of OpenCode extensibility options
 
 ## Documents
 
+### 0. **github-migration.md**
+Post-migration GitHub runbook with:
+- Branch protection bootstrap
+- Optional secrets setup
+- CLI verification commands
+- Docker-based CI validation flow
+
+**Read time**: 5-10 minutes
+
 ### 1. **FINDINGS_SUMMARY.txt** (START HERE)
 Quick executive summary with:
 - Key findings
