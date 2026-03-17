@@ -8,59 +8,25 @@ LanceDB-backed long-term memory provider for OpenCode.
 - Configuration model: sidecar config file at `~/.config/opencode/lancedb-opencode-pro.json`
 - Not recommended: top-level `memory` in `opencode.json`, because current OpenCode versions reject that key during config validation
 
-## Install (Recommended for current maturity: local `.tgz`)
+## Install
 
-At the moment, this project is best distributed as a local package tarball (`.tgz`) instead of a registry package name.
+### Primary (Recommended): npm package name
 
-Reason: OpenCode resolves non-`file://` plugin entries via its cache installer; if the package is not published to a public/private registry, startup can stall during dependency resolution.
-
-## SOP: Pack on build host, install on target host
-
-Use this flow when you want to enable `lancedb-opencode-pro` on another machine that already has OpenCode installed.
-
-1. On the build host, build and pack:
-
-```bash
-npm ci
-npm run typecheck
-npm run build
-npm pack
-```
-
-This generates a file like:
-
-```text
-lancedb-opencode-pro-0.1.0.tgz
-```
-
-2. Copy the `.tgz` to the target host (example):
-
-```bash
-scp lancedb-opencode-pro-0.1.0.tgz <user>@<target-host>:/tmp/
-```
-
-3. On the target host, install into a fixed local plugin directory:
-
-```bash
-mkdir -p ~/.config/opencode/plugins/lancedb-opencode-pro
-npm install --prefix ~/.config/opencode/plugins/lancedb-opencode-pro /tmp/lancedb-opencode-pro-0.1.0.tgz
-```
-
-4. Register the plugin as a `file://` path in `~/.config/opencode/opencode.json`:
+1. Register the published package name in `~/.config/opencode/opencode.json`:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
     "oh-my-opencode",
-    "file:///home/<user>/.config/opencode/plugins/lancedb-opencode-pro/node_modules/lancedb-opencode-pro/dist/index.js"
+    "lancedb-opencode-pro"
   ]
 }
 ```
 
-If you already use other plugins, keep them and append this `file://` entry.
+If you already use other plugins, keep them and append `"lancedb-opencode-pro"`.
 
-5. For OpenCode `1.2.27+`, create the sidecar config file `~/.config/opencode/lancedb-opencode-pro.json`:
+2. For OpenCode `1.2.27+`, create the sidecar config file `~/.config/opencode/lancedb-opencode-pro.json`:
 
 ```json
 {
@@ -83,14 +49,14 @@ If you already use other plugins, keep them and append this `file://` entry.
 }
 ```
 
-6. Set `embedding.baseUrl` to the Ollama endpoint that is reachable from that host.
+3. Set `embedding.baseUrl` to the Ollama endpoint that is reachable from that host.
 
 - Same machine as OpenCode: `http://127.0.0.1:11434`
 - Another machine on the network: for example `http://192.168.11.206:11434`
 
 You do not need `LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL` if the sidecar file already contains the correct `embedding.baseUrl`. Use the environment variable only when you want to override the file at runtime.
 
-7. Make sure Ollama is reachable from that host before starting OpenCode:
+4. Make sure Ollama is reachable from that host, then start or restart OpenCode:
 
 ```bash
 curl http://127.0.0.1:11434/api/tags
@@ -102,25 +68,56 @@ or, for a remote Ollama server:
 curl http://192.168.11.206:11434/api/tags
 ```
 
-8. Verify plugin file path and start/restart OpenCode:
-
-```bash
-ls -la ~/.config/opencode/plugins/lancedb-opencode-pro/node_modules/lancedb-opencode-pro/dist/index.js
-```
-
-Then start or restart OpenCode, and verify memory store initialization.
-
 After the first successful memory operation, LanceDB files should appear under:
 
 ```text
 ~/.opencode/memory/lancedb
 ```
 
-You can also verify that the directory exists:
+You can verify that the directory exists:
 
 ```bash
 ls -la ~/.opencode/memory/lancedb
 ```
+
+## Fallback Install From Release `.tgz`
+
+Use this only when npm registry install is unavailable (for example, restricted network, offline staging, or registry outage).
+
+1. Download the latest published release asset:
+
+```bash
+curl -fL "https://github.com/tryweb/lancedb-opencode-pro/releases/latest/download/lancedb-opencode-pro.tgz" -o /tmp/lancedb-opencode-pro.tgz
+```
+
+2. Install into the fixed local plugin directory:
+
+```bash
+mkdir -p ~/.config/opencode/plugins/lancedb-opencode-pro
+npm install --prefix ~/.config/opencode/plugins/lancedb-opencode-pro /tmp/lancedb-opencode-pro.tgz
+```
+
+3. Register the plugin as a `file://` path in `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "oh-my-opencode",
+    "file:///home/<user>/.config/opencode/plugins/lancedb-opencode-pro/node_modules/lancedb-opencode-pro/dist/index.js"
+  ]
+}
+```
+
+4. Reuse the same sidecar config from the primary install flow, then start/restart OpenCode.
+
+5. Verify plugin file path:
+
+```bash
+ls -la ~/.config/opencode/plugins/lancedb-opencode-pro/node_modules/lancedb-opencode-pro/dist/index.js
+```
+
+Then verify memory store initialization.
 
 ### When to use environment variables
 
@@ -136,6 +133,26 @@ export LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL="http://192.168.11.206:11434"
 ```
 
 This override has higher priority than the sidecar file.
+
+### Secondary Fallback: Build From Source And Pack Locally
+
+Use this when you need an unpublished local build (for example, testing unreleased commits).
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+npm pack
+```
+
+Then install the generated tarball:
+
+```bash
+mkdir -p ~/.config/opencode/plugins/lancedb-opencode-pro
+npm install --prefix ~/.config/opencode/plugins/lancedb-opencode-pro ./lancedb-opencode-pro-<version>.tgz
+```
+
+Use the same `file://` plugin registration shown in the fallback section above.
 
 ## OpenCode Config
 
@@ -302,6 +319,67 @@ The project provides layered validation workflows that can run locally or inside
 
 Threshold policy and benchmark profiles are documented in `docs/benchmark-thresholds.md`.
 Acceptance evidence mapping and archive/ship gate policy are documented in `docs/release-readiness.md`.
+
+## Maintainer Release SOP
+
+Use this flow when publishing a new version to npm.
+
+1. Update `package.json` version and `CHANGELOG.md`.
+2. Run the canonical release gate in Docker:
+
+```bash
+docker compose build --no-cache && docker compose up -d
+docker compose exec app npm run release:check
+```
+
+3. Confirm npm authentication:
+
+```bash
+npm whoami
+```
+
+If not logged in yet:
+
+```bash
+npm login
+```
+
+4. Publish from the host:
+
+```bash
+npm publish
+```
+
+5. Verify the package is live:
+
+```bash
+npm view lancedb-opencode-pro name version
+```
+
+Notes:
+
+- `prepublishOnly` runs `npm run verify:full`, so `npm publish` is blocked if the release gate fails.
+- `publishConfig.access=public` keeps first publish public.
+- For CI provenance attestation, publish from a supported CI provider with `npm publish --provenance`.
+- If your npm account enforces 2FA, complete the browser or OTP challenge during publish.
+
+### Troubleshooting: EACCES on `dist` or `dist-test`
+
+If `npm publish` fails with errors like `TS5033 ... EACCES: permission denied` for files under `dist/` or `dist-test/`, some build artifacts were likely created by `root` inside Docker.
+
+Fix ownership from the container, then re-run publish:
+
+```bash
+docker compose up -d
+docker compose exec -T -u root app sh -lc 'chown -R 1000:1000 /workspace/dist /workspace/dist-test 2>/dev/null || true'
+npm publish
+```
+
+You can validate ownership first:
+
+```bash
+ls -l dist dist-test/src 2>/dev/null
+```
 
 ## Docker Test Environment
 

@@ -36,7 +36,7 @@ Key outputs:
 - Latency hard gates: pass
   - `search.p50=0.49ms < 100ms`
   - `search.p99=1.88ms < 500ms`
-- Packaging: `lancedb-opencode-pro-0.1.0.tgz` generated
+- Packaging: `lancedb-opencode-pro-0.1.1.tgz` generated
 
 ## Acceptance Evidence Mapping
 

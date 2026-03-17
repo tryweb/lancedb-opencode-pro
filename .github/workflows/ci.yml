@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
@@ -52,6 +55,8 @@ jobs:
   verify-full-release:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
@@ -75,6 +80,26 @@ jobs:
           name: lancedb-opencode-pro-tgz
           path: lancedb-opencode-pro.tgz
           retention-days: 30
+
+      - name: Publish package to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          docker compose exec -T -e NPM_TOKEN="$NPM_TOKEN" app sh -lc '
+            if [ -z "$NPM_TOKEN" ]; then
+              echo "NPM_TOKEN is required for npm publish"
+              exit 1
+            fi
+            printf "//registry.npmjs.org/:_authToken=%s\n" "$NPM_TOKEN" > ~/.npmrc
+            npm publish lancedb-opencode-pro-*.tgz --access public
+            rm -f ~/.npmrc
+          '
+
+      - name: Publish GitHub release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: lancedb-opencode-pro.tgz
+          fail_on_unmatched_files: true
 
       - name: Tear down
         if: always()
