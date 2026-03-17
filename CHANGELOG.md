@@ -6,6 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.1.3] - 2026-03-17
+
+### Added
+- Append-only memory effectiveness events for capture, recall, and feedback auditing.
+- New tools: `memory_feedback_missing`, `memory_feedback_wrong`, `memory_feedback_useful`, and `memory_effectiveness`.
+- Foundation and regression coverage for event persistence, recall injection metrics, and feedback summary output.
+
+### Changed
+- `verify` now runs the dedicated `test:effectiveness` workflow before retrieval checks.
+- Release and operations docs now explain how to inspect capture, recall, and feedback metrics.
+
+---
+
+## [0.1.2] - 2026-03-17
+
+### Added
+- OpenAI embedding provider support alongside the default Ollama flow.
+- Explicit configuration validation for missing OpenAI API keys and embedding models.
+- Release packaging and regression coverage for the OpenAI embedding path.
+
+---
+
 ## [0.1.1] - 2026-03-16
 
 ### Added
