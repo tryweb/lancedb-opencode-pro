@@ -230,7 +230,22 @@ Supported environment variables:
   - `memory_delete`
   - `memory_clear`
   - `memory_stats`
+  - `memory_feedback_missing`
+  - `memory_feedback_wrong`
+  - `memory_feedback_useful`
+  - `memory_effectiveness`
   - `memory_port_plan`
+
+## Memory Effectiveness Feedback
+
+The provider can now record structured feedback about long-memory quality in addition to storing and recalling memories.
+
+- `memory_feedback_missing`: report information that should have been stored but was missed
+- `memory_feedback_wrong`: report a stored memory that should not have been kept
+- `memory_feedback_useful`: report whether a recalled memory was helpful
+- `memory_effectiveness`: return machine-readable capture, recall, and feedback metrics for the active scope
+
+Use `memory_search` or recalled memory ids from injected context when you need to reference a specific memory entry in feedback.
 
 ## OpenAI Embedding Configuration
 
@@ -362,9 +377,10 @@ The project provides layered validation workflows that can run locally or inside
 |---|---|
 | `npm run test:foundation` | Write-read persistence, scope isolation, vector compatibility, timestamp ordering |
 | `npm run test:regression` | Auto-capture extraction, search output shape, delete/clear safety, pruning |
+| `npm run test:effectiveness` | Foundation + regression workflows covering effectiveness events, feedback commands, and summary output |
 | `npm run test:retrieval` | Recall@K and Robustness-δ@K against synthetic fixtures |
 | `npm run benchmark:latency` | Search p50/p99, insert avg, list avg with hard-gate enforcement |
-| `npm run verify` | Typecheck + build + foundation + regression + retrieval (quick release check) |
+| `npm run verify` | Typecheck + build + effectiveness workflow + retrieval (quick release check) |
 | `npm run verify:full` | All of the above + benchmark + `npm pack` (full release gate) |
 
 Threshold policy and benchmark profiles are documented in `docs/benchmark-thresholds.md`.

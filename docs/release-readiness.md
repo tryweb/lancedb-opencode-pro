@@ -16,8 +16,7 @@ docker compose exec app npm run verify:full
 1. `npm run verify`
    - `typecheck`
    - `build`
-   - `test:foundation`
-   - `test:regression`
+   - `test:effectiveness`
    - `test:retrieval`
 2. `npm run benchmark:latency`
 3. `npm pack`
@@ -51,6 +50,10 @@ Key outputs:
 | Memory delete removes targeted record by ID or stable prefix | `test:regression` covers safety rejection; delete success path covered in `test:e2e` by ID | Partial (prefix behavior not implemented/verified) |
 | Memory clear only removes records in requested scope | `test:regression` + foundation scope tests + `test:e2e` | Automated |
 | Clear operation requires `confirm=true` | `test:regression`, `test:e2e` | Automated |
+| Users can report missing memory that should have been stored | `test:regression` (`feedback commands persist...`) | Automated |
+| Users can report stored memory that should not have been kept | `test:regression` (`feedback commands persist...`) | Automated |
+| Users can report whether recalled memory was helpful | `test:regression` (`feedback commands persist...`) | Automated |
+| Operators can inspect machine-readable effectiveness summary output | `test:regression` (`capture events...`, `recall injection...`, `feedback commands persist...`) | Automated |
 | Missing FTS index does not break retrieval | Not explicitly exercised by dedicated failure-path test | Manual-only (pending automation) |
 | Missing embedding backend does not crash plugin hooks | Not explicitly exercised by dedicated failure-path test | Manual-only (pending automation) |
 | Docker build and up succeeds | `verify:full` run | Automated |
@@ -65,6 +68,7 @@ Implemented automated coverage by phase:
 - Phase 0: vector dimension consistency, write-read cycle, scope isolation, timestamp ordering
 - Phase 1: Recall@K and Robustness-δ@K with synthetic fixture generation
 - Phase 3: auto-capture extraction, minimum length, category behavior, delete/clear safety, pruning
+- Phase 3: effectiveness event emission, recalled-memory id visibility, feedback command persistence, effectiveness summary output
 - Phase 4.1: latency benchmarks (search p50/p99 hard gates, insert/list informational metrics)
 
 Still manual or not yet automated:
