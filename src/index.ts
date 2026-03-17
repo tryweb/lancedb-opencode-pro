@@ -2,7 +2,8 @@ import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 import type { Part, TextPart } from "@opencode-ai/sdk";
 import { resolveMemoryConfig } from "./config.js";
-import { OllamaEmbedder } from "./embedder.js";
+import { createEmbedder } from "./embedder.js";
+import type { Embedder } from "./embedder.js";
 import { extractCaptureCandidate } from "./extract.js";
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
@@ -17,7 +18,12 @@ const plugin: Plugin = async (input) => {
 
   const hooks: Hooks = {
     config: async (config) => {
-      state.config = resolveMemoryConfig(config, input.worktree);
+      const nextConfig = resolveMemoryConfig(config, input.worktree);
+      if (hasEmbeddingConfigChanged(state.config.embedding, nextConfig.embedding)) {
+        state.embedder = createEmbedder(nextConfig.embedding);
+        state.initialized = false;
+      }
+      state.config = nextConfig;
     },
     event: async ({ event }) => {
       if (event.type === "session.idle" || event.type === "session.compacted") {
@@ -79,7 +85,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
-          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
           const activeScope = args.scope ?? deriveProjectScope(context.worktree);
           const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
 
@@ -119,7 +125,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
-          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
           if (!args.confirm) {
             return "Rejected: memory_delete requires confirm=true.";
           }
@@ -137,7 +143,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args) => {
           await state.ensureInitialized();
-          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
           if (!args.confirm) {
             return "Rejected: destructive clear requires confirm=true.";
           }
@@ -152,7 +158,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
-          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
           const scope = args.scope ?? deriveProjectScope(context.worktree);
           const entries = await state.store.list(scope, 20);
           const incompatibleVectors = await state.store.countIncompatibleVectors(
@@ -194,7 +200,7 @@ const plugin: Plugin = async (input) => {
         },
         execute: async (args, context) => {
           await state.ensureInitialized();
-          if (!state.initialized) return "Memory store unavailable (Ollama may be offline). Will retry automatically.";
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
           if (args.rangeStart > args.rangeEnd) {
             return "Invalid range: rangeStart must be <= rangeEnd.";
           }
@@ -291,7 +297,7 @@ const plugin: Plugin = async (input) => {
 
 async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<RuntimeState> {
   const resolved = resolveMemoryConfig(undefined, input.worktree);
-  const embedder = new OllamaEmbedder(resolved.embedding);
+  const embedder = createEmbedder(resolved.embedding);
   const store = new MemoryStore(resolved.dbPath);
 
   const state: RuntimeState = {
@@ -419,12 +425,26 @@ function unwrapData(value: unknown): unknown {
 
 interface RuntimeState {
   config: MemoryRuntimeConfig;
-  embedder: OllamaEmbedder;
+  embedder: Embedder;
   store: MemoryStore;
   defaultScope: string;
   initialized: boolean;
   captureBuffer: Map<string, string[]>;
   ensureInitialized: () => Promise<void>;
+}
+
+function unavailableMessage(provider: string): string {
+  return `Memory store unavailable (${provider} embedding may be offline). Will retry automatically.`;
+}
+
+function hasEmbeddingConfigChanged(current: MemoryRuntimeConfig["embedding"], next: MemoryRuntimeConfig["embedding"]): boolean {
+  return (
+    current.provider !== next.provider
+    || current.model !== next.model
+    || (current.baseUrl ?? "") !== (next.baseUrl ?? "")
+    || (current.apiKey ?? "") !== (next.apiKey ?? "")
+    || (current.timeoutMs ?? 0) !== (next.timeoutMs ?? 0)
+  );
 }
 
 export default plugin;

@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "@opencode-ai/sdk";
-import type { MemoryRuntimeConfig, RetrievalMode } from "./types.js";
+import type { EmbeddingProvider, MemoryRuntimeConfig, RetrievalMode } from "./types.js";
 import { clamp, expandHomePath, parseJsonObject, toBoolean, toNumber } from "./utils.js";
 
 const DEFAULT_DB_PATH = "~/.opencode/memory/lancedb";
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const SIDECAR_FILE = "lancedb-opencode-pro.json";
 
 export function resolveMemoryConfig(config: Config | undefined, worktree?: string): MemoryRuntimeConfig {
@@ -28,16 +29,42 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
   const normalizedVectorWeight = weightSum > 0 ? vectorWeight / weightSum : 0.7;
   const normalizedBm25Weight = weightSum > 0 ? bm25Weight / weightSum : 0.3;
 
-  return {
+  const embeddingProvider = resolveEmbeddingProvider(
+    firstString(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER, embeddingRaw.provider),
+  );
+  const embeddingModel =
+    embeddingProvider === "openai"
+      ? firstString(
+          process.env.LANCEDB_OPENCODE_PRO_OPENAI_MODEL,
+          process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL,
+          embeddingRaw.model,
+        )
+      : firstString(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL, embeddingRaw.model) ?? "nomic-embed-text";
+  const embeddingBaseUrl =
+    embeddingProvider === "openai"
+      ? firstString(process.env.LANCEDB_OPENCODE_PRO_OPENAI_BASE_URL, embeddingRaw.baseUrl) ?? DEFAULT_OPENAI_BASE_URL
+      : firstString(process.env.LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL, embeddingRaw.baseUrl) ?? DEFAULT_OLLAMA_BASE_URL;
+  const embeddingApiKey =
+    embeddingProvider === "openai"
+      ? firstString(process.env.LANCEDB_OPENCODE_PRO_OPENAI_API_KEY, embeddingRaw.apiKey)
+      : undefined;
+  const timeoutEnv =
+    embeddingProvider === "openai"
+      ? process.env.LANCEDB_OPENCODE_PRO_OPENAI_TIMEOUT_MS ?? process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS
+      : process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS;
+  const timeoutRaw = timeoutEnv ?? embeddingRaw.timeoutMs;
+
+  const resolvedConfig: MemoryRuntimeConfig = {
     provider,
     dbPath,
     embedding: {
-      provider: "ollama",
-      model: firstString(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL, embeddingRaw.model) ?? "nomic-embed-text",
-      baseUrl: firstString(process.env.LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL, embeddingRaw.baseUrl) ?? DEFAULT_OLLAMA_BASE_URL,
+      provider: embeddingProvider,
+      model: embeddingModel ?? "",
+      baseUrl: embeddingBaseUrl,
+      apiKey: embeddingApiKey,
       timeoutMs: Math.max(
         500,
-        Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS ?? embeddingRaw.timeoutMs, 6000)),
+        Math.floor(toNumber(timeoutRaw, 6000)),
       ),
     },
     retrieval: {
@@ -56,6 +83,31 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE ?? raw.maxEntriesPerScope, 3000)),
     ),
   };
+
+  validateEmbeddingConfig(resolvedConfig.embedding);
+  return resolvedConfig;
+}
+
+function resolveEmbeddingProvider(raw: string | undefined): EmbeddingProvider {
+  if (!raw || raw === "ollama") return "ollama";
+  if (raw === "openai") return "openai";
+  throw new Error(
+    `[lancedb-opencode-pro] Invalid embedding provider "${raw}". Expected "ollama" or "openai".`,
+  );
+}
+
+function validateEmbeddingConfig(embedding: MemoryRuntimeConfig["embedding"]): void {
+  if (embedding.provider !== "openai") return;
+  if (!embedding.apiKey) {
+    throw new Error(
+      "[lancedb-opencode-pro] OpenAI embedding provider requires apiKey. Set embedding.apiKey or LANCEDB_OPENCODE_PRO_OPENAI_API_KEY.",
+    );
+  }
+  if (!embedding.model) {
+    throw new Error(
+      "[lancedb-opencode-pro] OpenAI embedding provider requires model. Set embedding.model or LANCEDB_OPENCODE_PRO_OPENAI_MODEL.",
+    );
+  }
 }
 
 function loadSidecarConfig(worktree?: string): Record<string, unknown> {
