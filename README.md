@@ -247,6 +247,57 @@ The provider can now record structured feedback about long-memory quality in add
 
 Use `memory_search` or recalled memory ids from injected context when you need to reference a specific memory entry in feedback.
 
+### Viewing Metrics
+
+Use `memory_effectiveness` to inspect machine-readable effectiveness data for the active scope.
+
+```text
+memory_effectiveness
+```
+
+Example output:
+
+```json
+{
+  "scope": "project:my-project",
+  "totalEvents": 12,
+  "capture": {
+    "considered": 4,
+    "stored": 3,
+    "skipped": 1,
+    "successRate": 0.75,
+    "skipReasons": {
+      "below-min-chars": 1
+    }
+  },
+  "recall": {
+    "requested": 3,
+    "injected": 2,
+    "returnedResults": 2,
+    "hitRate": 0.67,
+    "injectionRate": 0.67
+  },
+  "feedback": {
+    "missing": 1,
+    "wrong": 0,
+    "useful": {
+      "positive": 2,
+      "negative": 0,
+      "helpfulRate": 1
+    },
+    "falsePositiveRate": 0,
+    "falseNegativeRate": 0.25
+  }
+}
+```
+
+Key fields:
+
+- `capture.successRate`: how often a considered candidate was stored.
+- `recall.hitRate`: how often a recall request returned at least one result.
+- `feedback.falsePositiveRate`: wrong-memory reports divided by stored memories.
+- `feedback.falseNegativeRate`: missing-memory reports relative to capture attempts.
+
 ## OpenAI Embedding Configuration
 
 Default behavior stays on Ollama. To use OpenAI embeddings, set `embedding.provider` to `openai` and provide API key + model.
