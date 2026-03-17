@@ -23,19 +23,20 @@ docker compose exec app npm run verify:full
 
 ## Latest Run Evidence
 
-- Date: `2026-03-16`
+- Date: `2026-03-17`
 - Environment: Docker (`node:22-bookworm`)
 - Result: `PASS`
 
 Key outputs:
 
-- Foundation: `4/4` pass
-- Regression: `4/4` pass
+- Foundation: `6/6` pass
+- Regression: `14/14` pass
 - Retrieval: `2/2` pass (`Recall@10=1.000`, `Robustness-0.5@10=1.000`)
+- Release dry-run: `npm publish --dry-run` pass
 - Latency hard gates: pass
-  - `search.p50=0.49ms < 100ms`
-  - `search.p99=1.88ms < 500ms`
-- Packaging: `lancedb-opencode-pro-0.1.1.tgz` generated
+  - `search.p50=0.51ms < 100ms`
+  - `search.p99=5.78ms < 500ms`
+- Packaging: `lancedb-opencode-pro-0.1.3.tgz` generated
 
 ## Acceptance Evidence Mapping
 
