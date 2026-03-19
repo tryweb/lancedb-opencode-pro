@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.1.4] - 2026-03-19
+
+### Added
+- Phase-1 retrieval ranking pipeline with reciprocal rank fusion (RRF), recency boost, and importance weighting controls.
+- Retrieval config keys and environment overrides for `rrfK`, `recencyBoost`, `recencyHalfLifeHours`, and `importanceWeight`.
+- Foundation and regression coverage for RRF scoring behavior and phase-1 ranking config defaults/overrides.
+- New OpenSpec capability `memory-retrieval-ranking-phase1` with archived implementation change record.
+
+### Changed
+- Hybrid retrieval ranking now fuses vector and BM25 channels via rank-based RRF instead of direct weighted-score summation.
+- Main specs for `memory-auto-capture-and-recall` and `memory-provider-config` now include phase-1 ranking requirements.
+- Validation and operations docs now include low-feedback interpretation guidance and proxy-metric review workflows.
+
+---
+
 ## [0.1.3] - 2026-03-17
 
 ### Added

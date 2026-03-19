@@ -22,6 +22,12 @@
 - [ ] Users can report whether recalled memory was helpful.
 - [ ] Operators can inspect machine-readable effectiveness summary output.
 
+## Low-Feedback Evaluation
+
+- [ ] Operators separate system-health metrics from product-value conclusions.
+- [ ] Zero explicit feedback is treated as insufficient signal, not as proof of good memory quality.
+- [ ] Proxy metrics or sampled audits are reviewed when explicit feedback is sparse.
+
 ## Build And Packaging
 
 - [ ] `docker compose build --no-cache && docker compose up -d` succeeds.

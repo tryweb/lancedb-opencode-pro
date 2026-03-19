@@ -348,6 +348,49 @@
   - Acceptance: Message explains problem + suggests fix
   - Example: "Vector dimension mismatch: expected 384, got 768. Run memory_clear to reset."
 
+### 7.3 Runtime Effectiveness Summary
+- [ ] **System-Health Metrics Are Reported**
+  - Test: Run `memory_effectiveness` after a realistic write/recall workflow
+  - Measurement: Verify capture success, skip reasons, recall hit rate, and recall injection rate are present
+  - Acceptance: Summary includes all runtime fields needed to judge operational health
+
+- [ ] **Zero Feedback Is Treated As Unknown Quality**
+  - Test: Review a summary with sparse or zero `feedback.*` counts
+  - Measurement: Confirm release guidance does not treat zero counts as success
+  - Acceptance: Review docs require proxy metrics or sample audits before claiming usefulness
+
+### 7.4 Low-Feedback Proxy Metrics
+- [ ] **Repeated-Context Reduction Review**
+  - Test: Compare follow-up sessions before/after memory use
+  - Measurement: Whether users repeat less project context manually
+  - Acceptance: Review process documents whether context repetition decreases, stays flat, or worsens
+
+- [ ] **Clarification Burden Review**
+  - Test: Inspect conversations after recall injection
+  - Measurement: Count reminder or context-recovery questions that should have been avoided
+  - Acceptance: Review process can identify whether memory reduced clarification turns
+
+- [ ] **Manual Memory Rescue Review**
+  - Test: Inspect whether operators still need `memory_search` after automatic recall
+  - Measurement: Manual search frequency relative to recall-heavy workflows
+  - Acceptance: Review process can describe whether automatic recall still required manual rescue
+
+- [ ] **Correction-Signal Review**
+  - Test: Inspect `memory_feedback_wrong`, `memory_feedback_missing`, and correction-like conversation turns
+  - Measurement: Frequency of stale, wrong, or irrelevant recall corrections
+  - Acceptance: Review process can identify whether memory introduced prompt contamination or stale context
+
+### 7.5 Sample Audit Workflow
+- [ ] **Sampled Recall Audit**
+  - Test: Review 10-20 recent recall injections from one active project scope
+  - Measurement: Classify each as relevant, neutral noise, or misleading
+  - Acceptance: Audit result is documented before release claims are made in sparse-feedback environments
+
+- [ ] **Sampled Skipped-Capture Audit**
+  - Test: Review 10-20 skipped captures, especially `no-positive-signal`
+  - Measurement: Determine whether durable decisions, facts, or preferences were missed
+  - Acceptance: Audit result identifies whether capture heuristics are too strict for real usage
+
 ---
 
 ## IMPLEMENTATION ROADMAP
@@ -478,4 +521,3 @@ async function profileLatency(fn: () => Promise<any>, iterations: number) {
 - **Monitor Tail Performance**: p99 latency matters more than average for interactive tools
 - **Scope Isolation is Critical**: Multi-project support depends on bulletproof scope enforcement
 - **Embedding Provider Abstraction**: Design tests to support future providers (OpenAI, local models, etc.)
-

@@ -114,6 +114,21 @@ Documentation & error messages
 | Helpful recall rate | Reported | 7 | User feedback |
 | False-positive / false-negative counts | Reported | 7 | User feedback |
 
+### Low-Feedback Proxy Metrics
+| Metric | Target | Phase | Reference |
+|--------|--------|-------|-----------|
+| Repeated-context reduction | Reviewed | 7 | Low-feedback framework |
+| Clarification burden reduction | Reviewed | 7 | Low-feedback framework |
+| Manual memory rescue rate | Reviewed | 7 | Low-feedback framework |
+| Correction-signal rate | Reviewed | 7 | Low-feedback framework |
+| Sampled recall usefulness | Reviewed | 7 | Low-feedback framework |
+
+Interpretation rules:
+
+- High `recall.hitRate` indicates retrieval availability, not proven usefulness.
+- Zero explicit feedback counts indicate missing labels unless a proxy-metric review or sample audit says otherwise.
+- Release review should pair runtime summaries with manual proxy-metric inspection whenever feedback volume is sparse.
+
 ---
 
 ## 🔍 Critical Tests (Must Pass Before Release)

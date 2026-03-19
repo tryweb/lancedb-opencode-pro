@@ -360,6 +360,48 @@ test("environment overrides can switch embedding provider to openai", async () =
   );
 });
 
+test("resolveMemoryConfig provides phase-1 retrieval defaults", () => {
+  const resolved = resolveMemoryConfig(
+    {
+      memory: {
+        provider: "lancedb-opencode-pro",
+      },
+    } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+    undefined,
+  );
+
+  assert.equal(resolved.retrieval.rrfK, 60);
+  assert.equal(resolved.retrieval.recencyBoost, true);
+  assert.equal(resolved.retrieval.recencyHalfLifeHours, 72);
+  assert.equal(resolved.retrieval.importanceWeight, 0.4);
+});
+
+test("resolveMemoryConfig applies phase-1 retrieval environment overrides", async () => {
+  await withPatchedEnv(
+    {
+      LANCEDB_OPENCODE_PRO_RRF_K: "30",
+      LANCEDB_OPENCODE_PRO_RECENCY_BOOST: "false",
+      LANCEDB_OPENCODE_PRO_RECENCY_HALF_LIFE_HOURS: "24",
+      LANCEDB_OPENCODE_PRO_IMPORTANCE_WEIGHT: "1.2",
+    },
+    async () => {
+      const resolved = resolveMemoryConfig(
+        {
+          memory: {
+            provider: "lancedb-opencode-pro",
+          },
+        } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+        undefined,
+      );
+
+      assert.equal(resolved.retrieval.rrfK, 30);
+      assert.equal(resolved.retrieval.recencyBoost, false);
+      assert.equal(resolved.retrieval.recencyHalfLifeHours, 24);
+      assert.equal(resolved.retrieval.importanceWeight, 1.2);
+    },
+  );
+});
+
 test("resolveMemoryConfig rejects invalid embedding provider values", async () => {
   await withPatchedEnv(
     {
