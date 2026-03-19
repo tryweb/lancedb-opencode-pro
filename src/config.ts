@@ -28,6 +28,17 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
   const weightSum = vectorWeight + bm25Weight;
   const normalizedVectorWeight = weightSum > 0 ? vectorWeight / weightSum : 0.7;
   const normalizedBm25Weight = weightSum > 0 ? bm25Weight / weightSum : 0.3;
+  const rrfK = Math.max(1, Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_RRF_K ?? retrievalRaw.rrfK, 60)));
+  const recencyBoost = toBoolean(process.env.LANCEDB_OPENCODE_PRO_RECENCY_BOOST ?? retrievalRaw.recencyBoost, true);
+  const recencyHalfLifeHours = Math.max(
+    1,
+    toNumber(process.env.LANCEDB_OPENCODE_PRO_RECENCY_HALF_LIFE_HOURS ?? retrievalRaw.recencyHalfLifeHours, 72),
+  );
+  const importanceWeight = clamp(
+    toNumber(process.env.LANCEDB_OPENCODE_PRO_IMPORTANCE_WEIGHT ?? retrievalRaw.importanceWeight, 0.4),
+    0,
+    2,
+  );
 
   const embeddingProvider = resolveEmbeddingProvider(
     firstString(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER, embeddingRaw.provider),
@@ -72,6 +83,10 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       vectorWeight: normalizedVectorWeight,
       bm25Weight: normalizedBm25Weight,
       minScore: clamp(toNumber(process.env.LANCEDB_OPENCODE_PRO_MIN_SCORE ?? retrievalRaw.minScore, 0.2), 0, 1),
+      rrfK,
+      recencyBoost,
+      recencyHalfLifeHours,
+      importanceWeight,
     },
     includeGlobalScope: toBoolean(process.env.LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE ?? raw.includeGlobalScope, true),
     minCaptureChars: Math.max(

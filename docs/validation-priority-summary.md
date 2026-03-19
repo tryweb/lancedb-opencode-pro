@@ -276,6 +276,8 @@ async function profileLatency(fn: () => Promise<any>, iterations: number) {
 | p99 latency > 1000ms | Profile search algorithm + index structure |
 | Scope isolation failure | STOP - data privacy issue, fix before release |
 | Vector dimension mismatch | STOP - data integrity issue, fix before release |
+| Recall hit rate is high but feedback is near zero | Treat as insufficient evidence; review proxy metrics or run a sample audit |
+| Users still repeat background context after recall | Investigate product-value gap even if system-health metrics look good |
 
 ---
 
@@ -286,4 +288,3 @@ See `memory-validation-checklist.md` for:
 - Complete measurement methodology
 - Implementation roadmap (4 sprints)
 - Success criteria for v0.1.0
-

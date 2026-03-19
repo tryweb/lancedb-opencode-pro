@@ -77,6 +77,7 @@ Still manual or not yet automated:
 - FTS degradation fault injection validation
 - embedding-backend-unavailable fault-path validation
 - broader phase items outside current change scope (phase 2/5+/scalability extremes)
+- low-feedback proxy metrics remain documentation-driven and require reviewer judgment or sampling
 
 ## Manual-Only Items (Current)
 
@@ -85,6 +86,20 @@ Before archive/ship, retain these as explicit manual checks:
 1. Force an FTS-index failure scenario and verify retrieval fallback behavior.
 2. Force embedding backend outage and verify hook-level graceful behavior.
 3. Run real OpenCode directory-switch scenario end-to-end to validate scope transition behavior in live integration.
+4. If explicit `memory_feedback_*` counts are sparse, review proxy metrics or run a bounded audit of recalled memories and skipped captures.
+
+## Low-Feedback Evaluation Guidance
+
+Interpret `memory_effectiveness` in two layers:
+
+- **System health**: capture success, skip reasons, recall hit rate, and recall injection rate.
+- **Product value**: repeated-context reduction, clarification burden reduction, manual memory rescue rate, correction-signal rate, and sampled recall usefulness.
+
+Review rules:
+
+- Zero feedback counts are insufficient evidence, not proof of zero defects.
+- High `recall.hitRate` or `recall.injectionRate` means memory was available, not necessarily useful.
+- When feedback volume is sparse, release reviewers should document either proxy-metric observations or the outcome of a sampled audit.
 
 ## Archive / Ship Gate
 
@@ -93,3 +108,4 @@ Treat release as ready when all conditions are true:
 1. `docker compose exec app npm run verify:full` passes.
 2. No new failing items in the manual-only checklist above.
 3. Any unresolved manual-only item is explicitly documented in release notes.
+4. Sparse-feedback releases include a low-feedback interpretation note or sample-audit outcome.

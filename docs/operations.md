@@ -27,6 +27,13 @@
 - User feedback is recorded through `memory_feedback_missing`, `memory_feedback_wrong`, and `memory_feedback_useful`.
 - Operators can inspect the aggregated machine-readable summary with `memory_effectiveness` for the active project scope.
 
+### System Health vs Product Value
+
+- **System health metrics**: `capture.successRate`, `capture.skipReasons`, `recall.hitRate`, and `recall.injectionRate`.
+- **Product value metrics**: repeated-context reduction, clarification burden reduction, manual memory rescue rate, correction-signal rate, and sampled recall usefulness.
+- High recall availability means the store can return something; it does not prove that the injected memory helped the conversation.
+- Zero `feedback.*` counts mean the workflow lacks direct labels, not that memory quality is confirmed.
+
 ### Example Workflow
 
 ```text
@@ -43,3 +50,25 @@ Expected summary fields:
 - `recall.requested`, `recall.returnedResults`, `recall.injected`
 - `feedback.missing`, `feedback.wrong`, `feedback.useful`
 - `feedback.falsePositiveRate`, `feedback.falseNegativeRate`
+
+### Low-Feedback Proxy Metrics
+
+Use these proxy metrics when users rarely submit `memory_feedback_*` commands:
+
+| Proxy metric | What it means | Current evidence source |
+|---|---|---|
+| Repeated-context reduction | Users repeat less project context across sessions or follow-up turns | Manual conversation review; not instrumented yet |
+| Clarification burden | Agent asks fewer reminder or context-recovery questions | Manual conversation review; not instrumented yet |
+| Manual memory rescue rate | Users still need `memory_search` after automatic recall | Search activity + session review; not instrumented as a dedicated rate |
+| Correction-signal rate | Users say the recalled context is wrong, stale, or irrelevant | `memory_feedback_wrong`, `memory_feedback_missing`, or conversation review |
+| Sampled recall usefulness | Audited recalled memories appear relevant and actually help move work forward | Sample audit of recalled memories |
+
+### Sample Audit Workflow
+
+When explicit feedback is sparse, run a bounded audit instead of assuming quality:
+
+1. Sample 10-20 recent recall injections from the same project scope.
+2. For each sample, inspect the recalled memory text and the next assistant reply.
+3. Mark whether the memory was relevant, neutral noise, or misleading.
+4. Sample 10-20 skipped captures, especially `no-positive-signal`, and check whether important durable knowledge was missed.
+5. Treat the audit as release input alongside `memory_effectiveness`, not as a replacement for runtime metrics.

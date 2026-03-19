@@ -29,6 +29,10 @@ export interface RetrievalConfig {
   vectorWeight: number;
   bm25Weight: number;
   minScore: number;
+  rrfK: number;
+  recencyBoost: boolean;
+  recencyHalfLifeHours: number;
+  importanceWeight: number;
 }
 
 export interface MemoryRuntimeConfig {

@@ -138,22 +138,65 @@ export class MemoryStore {
     vectorWeight: number;
     bm25Weight: number;
     minScore: number;
+    rrfK?: number;
+    recencyBoost?: boolean;
+    recencyHalfLifeHours?: number;
+    importanceWeight?: number;
   }): Promise<SearchResult[]> {
     const cached = await this.getCachedScopes(params.scopes);
     if (cached.records.length === 0) return [];
 
     const queryTokens = tokenize(params.query);
-
     const queryNorm = vecNorm(params.queryVector);
+    const useVectorChannel = params.queryVector.length > 0 && params.vectorWeight > 0;
+    const useBm25Channel = queryTokens.length > 0 && params.bm25Weight > 0;
+    const { vectorWeight, bm25Weight } = normalizeChannelWeights(
+      useVectorChannel ? params.vectorWeight : 0,
+      useBm25Channel ? params.bm25Weight : 0,
+    );
+    const rrfK = Math.max(1, Math.floor(params.rrfK ?? 60));
+    const recencyBoostEnabled = params.recencyBoost ?? true;
+    const recencyHalfLifeHours = Math.max(1, params.recencyHalfLifeHours ?? 72);
+    const importanceWeight = clampImportanceWeight(params.importanceWeight ?? 0.4);
 
-    const scored = cached.records
+    const candidates = cached.records
       .filter((record) => params.queryVector.length === 0 || record.vector.length === params.queryVector.length)
       .map((record, index) => {
         const recordNorm = cached.norms.get(record.id) ?? vecNorm(record.vector);
-        const vectorScore = fastCosine(params.queryVector, record.vector, queryNorm, recordNorm);
-        const bm25Score = bm25LikeScore(queryTokens, cached.tokenized[index], cached.idf);
-        const score = params.vectorWeight * vectorScore + params.bm25Weight * bm25Score;
-        return { record, score, vectorScore, bm25Score };
+        const vectorScore = useVectorChannel ? fastCosine(params.queryVector, record.vector, queryNorm, recordNorm) : 0;
+        const bm25Score = useBm25Channel ? bm25LikeScore(queryTokens, cached.tokenized[index], cached.idf) : 0;
+        return { record, vectorScore, bm25Score };
+      });
+
+    if (candidates.length === 0) return [];
+
+    const vectorRanks = useVectorChannel ? buildRankMap(candidates, (item) => item.vectorScore) : null;
+    const bm25Ranks = useBm25Channel ? buildRankMap(candidates, (item) => item.bm25Score) : null;
+
+    const scored = candidates
+      .map((item) => {
+        let rrfScore = 0;
+        if (vectorRanks) {
+          const rank = vectorRanks.get(item.record.id);
+          if (rank !== undefined) rrfScore += vectorWeight / (rrfK + rank);
+        }
+        if (bm25Ranks) {
+          const rank = bm25Ranks.get(item.record.id);
+          if (rank !== undefined) rrfScore += bm25Weight / (rrfK + rank);
+        }
+        rrfScore *= rrfK + 1;
+
+        const recencyFactor = recencyBoostEnabled
+          ? computeRecencyMultiplier(item.record.timestamp, recencyHalfLifeHours)
+          : 1;
+        const importanceFactor = 1 + importanceWeight * clampImportance(item.record.importance);
+        const score = rrfScore * recencyFactor * importanceFactor;
+        return {
+          record: item.record,
+          score,
+          vectorScore: item.vectorScore,
+          bm25Score: item.bm25Score,
+        };
       })
       .filter((item) => item.score >= params.minScore)
       .sort((a, b) => b.score - a.score)
@@ -512,6 +555,48 @@ function normalizeEventRow(row: Record<string, unknown>): MemoryEffectivenessEve
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+function buildRankMap<T extends { record: { id: string } }>(
+  items: T[],
+  scoreOf: (item: T) => number,
+): Map<string, number> {
+  const ranked = [...items].sort((a, b) => scoreOf(b) - scoreOf(a));
+  const ranks = new Map<string, number>();
+  for (let i = 0; i < ranked.length; i += 1) {
+    ranks.set(ranked[i].record.id, i + 1);
+  }
+  return ranks;
+}
+
+function normalizeChannelWeights(vectorWeight: number, bm25Weight: number): { vectorWeight: number; bm25Weight: number } {
+  const sum = vectorWeight + bm25Weight;
+  if (sum <= 0) {
+    return { vectorWeight: 0.5, bm25Weight: 0.5 };
+  }
+  return {
+    vectorWeight: vectorWeight / sum,
+    bm25Weight: bm25Weight / sum,
+  };
+}
+
+function computeRecencyMultiplier(timestamp: number, halfLifeHours: number): number {
+  const now = Date.now();
+  const ageMs = Math.max(0, now - timestamp);
+  const ageHours = ageMs / 3_600_000;
+  if (ageHours === 0) return 1;
+  const decay = Math.pow(0.5, ageHours / halfLifeHours);
+  return 0.5 + 0.5 * decay;
+}
+
+function clampImportance(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function clampImportanceWeight(value: number): number {
+  if (!Number.isFinite(value)) return 0.4;
+  return Math.max(0, Math.min(2, value));
 }
 
 function computeIdf(docs: string[][]): Map<string, number> {

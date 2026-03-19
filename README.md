@@ -41,7 +41,11 @@ If you already use other plugins, keep them and append `"lancedb-opencode-pro"`.
     "mode": "hybrid",
     "vectorWeight": 0.7,
     "bm25Weight": 0.3,
-    "minScore": 0.2
+    "minScore": 0.2,
+    "rrfK": 60,
+    "recencyBoost": true,
+    "recencyHalfLifeHours": 72,
+    "importanceWeight": 0.4
   },
   "includeGlobalScope": true,
   "minCaptureChars": 80,
@@ -173,7 +177,11 @@ Create `~/.config/opencode/lancedb-opencode-pro.json`:
     "mode": "hybrid",
     "vectorWeight": 0.7,
     "bm25Weight": 0.3,
-    "minScore": 0.2
+    "minScore": 0.2,
+    "rrfK": 60,
+    "recencyBoost": true,
+    "recencyHalfLifeHours": 72,
+    "importanceWeight": 0.4
   },
   "includeGlobalScope": true,
   "minCaptureChars": 80,
@@ -216,6 +224,10 @@ Supported environment variables:
 - `LANCEDB_OPENCODE_PRO_VECTOR_WEIGHT`
 - `LANCEDB_OPENCODE_PRO_BM25_WEIGHT`
 - `LANCEDB_OPENCODE_PRO_MIN_SCORE`
+- `LANCEDB_OPENCODE_PRO_RRF_K`
+- `LANCEDB_OPENCODE_PRO_RECENCY_BOOST`
+- `LANCEDB_OPENCODE_PRO_RECENCY_HALF_LIFE_HOURS`
+- `LANCEDB_OPENCODE_PRO_IMPORTANCE_WEIGHT`
 - `LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE`
 - `LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS`
 - `LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE`
@@ -298,6 +310,22 @@ Key fields:
 - `feedback.falsePositiveRate`: wrong-memory reports divided by stored memories.
 - `feedback.falseNegativeRate`: missing-memory reports relative to capture attempts.
 
+### Interpreting Low-Feedback Results
+
+In real OpenCode usage, auto-capture and recall happen in the background, so explicit `memory_feedback_*` events are often sparse.
+
+- Treat `capture.*` and `recall.*` as system-health metrics: they show whether the memory pipeline is running.
+- Treat repeated-context reduction, clarification burden, manual memory rescue, correction signals, and sampled audits as product-value signals: they show whether memory actually helped the user.
+- Treat `feedback.* = 0` as insufficient evidence, not proof that memory quality is good.
+- Treat a high `recall.hitRate` or `recall.injectionRate` as recall availability only; those values do not prove usefulness by themselves.
+
+Recommended review order in low-feedback environments:
+
+1. Check `capture.successRate`, `capture.skipReasons`, `recall.hitRate`, and `recall.injectionRate` for operational health.
+2. Review whether users repeated background context less often or needed fewer clarification turns.
+3. Check whether users still needed manual rescue through `memory_search` or issued correction-like responses.
+4. Run a bounded audit of recalled memories or skipped captures before concluding the system is helping.
+
 ## OpenAI Embedding Configuration
 
 Default behavior stays on Ollama. To use OpenAI embeddings, set `embedding.provider` to `openai` and provide API key + model.
@@ -318,7 +346,11 @@ Example sidecar:
     "mode": "hybrid",
     "vectorWeight": 0.7,
     "bm25Weight": 0.3,
-    "minScore": 0.2
+    "minScore": 0.2,
+    "rrfK": 60,
+    "recencyBoost": true,
+    "recencyHalfLifeHours": 72,
+    "importanceWeight": 0.4
   },
   "includeGlobalScope": true,
   "minCaptureChars": 80,

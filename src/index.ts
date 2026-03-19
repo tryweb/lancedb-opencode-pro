@@ -63,6 +63,10 @@ const plugin: Plugin = async (input) => {
         vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
         bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
         minScore: state.config.retrieval.minScore,
+        rrfK: state.config.retrieval.rrfK,
+        recencyBoost: state.config.retrieval.recencyBoost,
+        recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
+        importanceWeight: state.config.retrieval.importanceWeight,
       });
 
       await state.store.putEvent({
@@ -118,6 +122,10 @@ const plugin: Plugin = async (input) => {
             vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
             bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
             minScore: state.config.retrieval.minScore,
+            rrfK: state.config.retrieval.rrfK,
+            recencyBoost: state.config.retrieval.recencyBoost,
+            recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
+            importanceWeight: state.config.retrieval.importanceWeight,
           });
 
           if (results.length === 0) return "No relevant memory found.";

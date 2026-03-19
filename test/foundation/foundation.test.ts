@@ -241,3 +241,146 @@ test("effectiveness summary aggregates capture recall and feedback metrics", asy
     await cleanupDbPath(dbPath);
   }
 });
+
+test("search scoring uses normalized RRF fusion when recency and importance boosts are disabled", async () => {
+  const { store, dbPath } = await createTestStore();
+
+  try {
+    const scope = "project:rrf";
+    const queryVector = createVector(384, 0.9);
+    const records = [
+      createTestRecord({
+        id: "rrf-a",
+        scope,
+        text: "alpha alpha alpha",
+        vector: createVector(384, 0.91),
+        vectorDim: 384,
+        importance: 0.5,
+        timestamp: 10_000,
+      }),
+      createTestRecord({
+        id: "rrf-b",
+        scope,
+        text: "alpha",
+        vector: createVector(384, 0.85),
+        vectorDim: 384,
+        importance: 0.5,
+        timestamp: 10_000,
+      }),
+      createTestRecord({
+        id: "rrf-c",
+        scope,
+        text: "alpha alpha",
+        vector: createVector(384, 0.8),
+        vectorDim: 384,
+        importance: 0.5,
+        timestamp: 10_000,
+      }),
+    ];
+
+    for (const record of records) {
+      await store.put(record);
+    }
+
+    const results = await store.search({
+      query: "alpha",
+      queryVector,
+      scopes: [scope],
+      limit: 10,
+      vectorWeight: 0.7,
+      bm25Weight: 0.3,
+      minScore: 0,
+      rrfK: 10,
+      recencyBoost: false,
+      importanceWeight: 0,
+    });
+
+    assert.equal(results.length, 3);
+
+    const vectorRank = new Map(
+      [...results]
+        .sort((a, b) => b.vectorScore - a.vectorScore)
+        .map((item, index) => [item.record.id, index + 1] as const),
+    );
+    const bm25Rank = new Map(
+      [...results]
+        .sort((a, b) => b.bm25Score - a.bm25Score)
+        .map((item, index) => [item.record.id, index + 1] as const),
+    );
+
+    for (const item of results) {
+      const vr = vectorRank.get(item.record.id) ?? 0;
+      const br = bm25Rank.get(item.record.id) ?? 0;
+      const expected = 11 * (0.7 / (10 + vr) + 0.3 / (10 + br));
+      assert.ok(Math.abs(item.score - expected) < 1e-9, `unexpected RRF score for ${item.record.id}`);
+    }
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("recency and importance multipliers influence ranking order", async () => {
+  const { store, dbPath } = await createTestStore();
+
+  try {
+    const scope = "project:boost";
+    await store.put(
+      createTestRecord({
+        id: "boost-old-high-importance",
+        scope,
+        text: "gateway timeout resolved",
+        vector: createVector(384, 0.7),
+        vectorDim: 384,
+        timestamp: Date.now() - 14 * 24 * 3_600_000,
+        importance: 1,
+      }),
+    );
+    await store.put(
+      createTestRecord({
+        id: "boost-new-low-importance",
+        scope,
+        text: "gateway timeout resolved",
+        vector: createVector(384, 0.7),
+        vectorDim: 384,
+        timestamp: Date.now(),
+        importance: 0,
+      }),
+    );
+
+    const query = "gateway timeout resolved";
+    const queryVector = createVector(384, 0.7);
+
+    const noRecency = await store.search({
+      query,
+      queryVector,
+      scopes: [scope],
+      limit: 2,
+      vectorWeight: 0.5,
+      bm25Weight: 0.5,
+      minScore: 0,
+      recencyBoost: false,
+      importanceWeight: 1,
+      rrfK: 60,
+    });
+
+    assert.equal(noRecency[0]?.record.id, "boost-old-high-importance");
+
+    const withRecency = await store.search({
+      query,
+      queryVector,
+      scopes: [scope],
+      limit: 2,
+      vectorWeight: 0.5,
+      bm25Weight: 0.5,
+      minScore: 0,
+      recencyBoost: true,
+      recencyHalfLifeHours: 24,
+      importanceWeight: 0,
+      rrfK: 60,
+    });
+
+    assert.equal(withRecency[0]?.record.id, "boost-new-low-importance");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
