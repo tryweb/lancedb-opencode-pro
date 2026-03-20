@@ -1,8 +1,8 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
-import assert from "node:assert/strict";
 import { MemoryStore } from "../src/store.js";
 import type { EffectivenessSummary, MemoryCategory, MemoryEffectivenessEvent, MemoryRecord, RecallSource } from "../src/types.js";
 
@@ -22,6 +22,31 @@ export async function createTestStore(dbPath?: string): Promise<{ store: MemoryS
 
 export async function cleanupDbPath(dbPath: string): Promise<void> {
   await rm(dbPath, { recursive: true, force: true });
+}
+
+export async function seedLegacyEffectivenessEventsTable(dbPath: string, scope = "project:legacy"): Promise<void> {
+  const lancedb = await import("@lancedb/lancedb");
+  const connection = await lancedb.connect(dbPath);
+  await connection.createTable("effectiveness_events", [
+    {
+      id: "legacy-recall-1",
+      type: "recall",
+      scope,
+      sessionID: "sess-legacy",
+      timestamp: 1_000,
+      memoryId: "",
+      text: "",
+      outcome: "",
+      skipReason: "",
+      resultCount: 0,
+      injected: false,
+      feedbackType: "",
+      helpful: -1,
+      reason: "",
+      labelsJson: "[]",
+      metadataJson: "{}",
+    },
+  ]);
 }
 
 export function createVector(dim = DEFAULT_VECTOR_DIM, seed = 0.1): number[] {
