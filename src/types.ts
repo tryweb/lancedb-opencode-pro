@@ -16,6 +16,8 @@ export type CaptureSkipReason =
 
 export type FeedbackType = "missing" | "wrong" | "useful";
 
+export type RecallSource = "system-transform" | "manual-search";
+
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
   model: string;
@@ -97,6 +99,7 @@ export interface RecallEvent extends MemoryEffectivenessEventBase {
   type: "recall";
   resultCount: number;
   injected: boolean;
+  source?: RecallSource;
 }
 
 export interface FeedbackEvent extends MemoryEffectivenessEventBase {
@@ -125,6 +128,19 @@ export interface EffectivenessSummary {
     returnedResults: number;
     hitRate: number;
     injectionRate: number;
+    auto: {
+      requested: number;
+      injected: number;
+      returnedResults: number;
+      hitRate: number;
+      injectionRate: number;
+    };
+    manual: {
+      requested: number;
+      returnedResults: number;
+      hitRate: number;
+    };
+    manualRescueRatio: number;
   };
   feedback: {
     missing: number;
