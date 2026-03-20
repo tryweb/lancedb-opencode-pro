@@ -4,10 +4,12 @@ import {
   assertRecordsMatch,
   cleanupDbPath,
   createScopedRecords,
+  createTempDbPath,
   createTestEvent,
   createTestRecord,
   createTestStore,
   createVector,
+  seedLegacyEffectivenessEventsTable,
 } from "../setup.js";
 
 test("write-read persistence keeps field integrity across multiple scopes", async () => {
@@ -267,6 +269,34 @@ test("auto and manual recall events are stored and scoped correctly and summariz
     assert.ok(Math.abs(summary.recall.manual.hitRate - 0.5) < 1e-9);
 
     assert.ok(Math.abs(summary.recall.manualRescueRatio - 2) < 1e-9);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("store init patches legacy effectiveness_events schema before writing recall source", async () => {
+  const dbPath = await createTempDbPath();
+
+  try {
+    await seedLegacyEffectivenessEventsTable(dbPath);
+    const { store } = await createTestStore(dbPath);
+
+    await store.putEvent(
+      createTestEvent({
+        id: "patched-recall",
+        type: "recall",
+        scope: "project:legacy",
+        source: "manual-search",
+        resultCount: 2,
+        injected: false,
+      }),
+    );
+
+    const events = await store.listEvents(["project:legacy"], 10);
+    const patchedEvent = events.find((event) => event.id === "patched-recall");
+    assert.ok(patchedEvent);
+    assert.equal(patchedEvent?.type, "recall");
+    assert.equal(patchedEvent?.source, "manual-search");
   } finally {
     await cleanupDbPath(dbPath);
   }

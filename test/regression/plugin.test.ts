@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveMemoryConfig } from "../../src/config.js";
 import plugin from "../../src/index.js";
-import { cleanupDbPath, createScopedRecords, createTempDbPath, createTestStore, createVector } from "../setup.js";
+import { cleanupDbPath, createScopedRecords, createTempDbPath, createTestStore, createVector, seedLegacyEffectivenessEventsTable } from "../setup.js";
 
 const SESSION_ID = "sess-test-001";
 const WORKTREE = "/workspace/project-under-test";
@@ -80,9 +80,10 @@ async function createPluginHarness(options?: {
   userMessages?: SessionMessage[];
   sessionDirectory?: string;
   embeddingProvider?: "ollama" | "openai";
+  dbPath?: string;
 }) {
   const embeddingProvider = options?.embeddingProvider ?? "ollama";
-  const dbPath = await createTempDbPath("lancedb-opencode-pro-regression-");
+  const dbPath = options?.dbPath ?? (await createTempDbPath("lancedb-opencode-pro-regression-"));
   const memoryConfig = {
     memory: {
       provider: "lancedb-opencode-pro",
@@ -526,6 +527,39 @@ test("memory_search emits manual-search recall event and effectiveness summary s
     assert.equal(summary.recall.requested, 2);
     assert.equal(summary.recall.auto.requested, 1);
     assert.equal(summary.recall.auto.injected, 1);
+    assert.equal(summary.recall.manual.requested, 1);
+    assert.ok(summary.recall.manual.returnedResults >= 0);
+    assert.ok(Math.abs(summary.recall.manualRescueRatio - 1) < 1e-9);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("upgraded legacy event data defaults missing source to system-transform while accepting new manual-search events", async () => {
+  const dbPath = await createTempDbPath("lancedb-opencode-pro-legacy-regression-");
+  await seedLegacyEffectivenessEventsTable(dbPath, "global");
+  const harness = await createPluginHarness({ dbPath });
+
+  try {
+    await harness.capture("Nginx 502 fixed by increasing proxy_buffer_size and confirming upstream health checks. Resolved successfully.");
+
+    await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute({ query: "Nginx 502 proxy_buffer_size", limit: 5 }, harness.context),
+    );
+
+    const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
+    const summary = parseJson<{
+      recall: {
+        requested: number;
+        auto: { requested: number; returnedResults: number };
+        manual: { requested: number; returnedResults: number };
+        manualRescueRatio: number;
+      };
+    }>(summaryOutput);
+
+    assert.equal(summary.recall.requested, 2);
+    assert.equal(summary.recall.auto.requested, 1);
+    assert.equal(summary.recall.auto.returnedResults, 0);
     assert.equal(summary.recall.manual.requested, 1);
     assert.ok(summary.recall.manual.returnedResults >= 0);
     assert.ok(Math.abs(summary.recall.manualRescueRatio - 1) < 1e-9);

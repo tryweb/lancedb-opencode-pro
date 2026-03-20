@@ -12,7 +12,9 @@ type LanceConnection = {
 
 type LanceTable = {
   add(rows: unknown[]): Promise<void>;
+  addColumns(transforms: Array<{ name: string; valueSql: string }>): Promise<unknown>;
   delete(filter: string): Promise<void>;
+  schema(): Promise<{ fields: Array<{ name: string }> }>;
   query(): {
     where(expr: string): ReturnType<LanceTable["query"]>;
     select(columns: string[]): ReturnType<LanceTable["query"]>;
@@ -24,6 +26,7 @@ type LanceTable = {
 
 const TABLE_NAME = "memories";
 const EVENTS_TABLE_NAME = "effectiveness_events";
+const EVENTS_SOURCE_COLUMN = "source";
 
 interface ScopeCache {
   records: MemoryRecord[];
@@ -98,6 +101,8 @@ export class MemoryStore {
       this.eventTable = await this.connection.createTable(EVENTS_TABLE_NAME, [bootstrapEvent]);
       await this.eventTable.delete("id = '__bootstrap__'");
     }
+
+    await this.ensureEventTableCompatibility();
 
     await this.ensureIndexes();
   }
@@ -503,6 +508,24 @@ export class MemoryStore {
     } catch (error) {
       this.indexState.fts = false;
       this.indexState.ftsError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  private async ensureEventTableCompatibility(): Promise<void> {
+    const table = this.requireEventTable();
+    const schema = await table.schema();
+    const hasSourceColumn = schema.fields.some((field) => field.name === EVENTS_SOURCE_COLUMN);
+    if (hasSourceColumn) {
+      return;
+    }
+
+    try {
+      await table.addColumns([{ name: EVENTS_SOURCE_COLUMN, valueSql: "CAST(NULL AS STRING)" }]);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Failed to patch ${EVENTS_TABLE_NAME} schema for ${EVENTS_SOURCE_COLUMN}: ${reason}`,
+      );
     }
   }
 }

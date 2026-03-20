@@ -1,8 +1,5 @@
-# memory-effectiveness-evaluation Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change add-memory-effectiveness-evaluation. Update Purpose after archive.
-## Requirements
 ### Requirement: Memory effectiveness event model
 The system MUST persist append-only evaluation events for memory capture, memory recall, and user feedback so operators can audit how long-memory behavior performed in real sessions. Recall events MUST include a source field that distinguishes automatic system-transform recall from manual user-initiated search. When the persisted `effectiveness_events` table comes from an older plugin version that lacks the `source` column, the system MUST patch the table schema during initialization before appending new recall events.
 
@@ -44,4 +41,3 @@ The system MUST support quantitative summaries for long-memory effectiveness tha
 #### Scenario: Manual rescue ratio is reported
 - **WHEN** the effectiveness summary includes both auto and manual recall data
 - **THEN** the system reports a manual rescue ratio representing manual search frequency relative to auto recall frequency
-
