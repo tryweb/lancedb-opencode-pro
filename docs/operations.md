@@ -29,7 +29,7 @@
 
 ### System Health vs Product Value
 
-- **System health metrics**: `capture.successRate`, `capture.skipReasons`, `recall.hitRate`, and `recall.injectionRate`.
+- **System health metrics**: `capture.successRate`, `capture.skipReasons`, `recall.hitRate`, `recall.injectionRate`, `recall.auto.*`, `recall.manual.*`, and `recall.manualRescueRatio`.
 - **Product value metrics**: repeated-context reduction, clarification burden reduction, manual memory rescue rate, correction-signal rate, and sampled recall usefulness.
 - High recall availability means the store can return something; it does not prove that the injected memory helped the conversation.
 - Zero `feedback.*` counts mean the workflow lacks direct labels, not that memory quality is confirmed.
@@ -48,6 +48,9 @@ Expected summary fields:
 - `capture.considered`, `capture.stored`, `capture.skipped`
 - `capture.skipReasons`
 - `recall.requested`, `recall.returnedResults`, `recall.injected`
+- `recall.auto.requested`, `recall.auto.injected`, `recall.auto.returnedResults`, `recall.auto.hitRate`, `recall.auto.injectionRate`
+- `recall.manual.requested`, `recall.manual.returnedResults`, `recall.manual.hitRate`
+- `recall.manualRescueRatio`
 - `feedback.missing`, `feedback.wrong`, `feedback.useful`
 - `feedback.falsePositiveRate`, `feedback.falseNegativeRate`
 
@@ -59,7 +62,7 @@ Use these proxy metrics when users rarely submit `memory_feedback_*` commands:
 |---|---|---|
 | Repeated-context reduction | Users repeat less project context across sessions or follow-up turns | Manual conversation review; not instrumented yet |
 | Clarification burden | Agent asks fewer reminder or context-recovery questions | Manual conversation review; not instrumented yet |
-| Manual memory rescue rate | Users still need `memory_search` after automatic recall | Search activity + session review; not instrumented as a dedicated rate |
+| Manual memory rescue rate | Users still need `memory_search` after automatic recall | Instrumented: `recall.manual.requested / recall.manualRescueRatio` in `memory_effectiveness` output |
 | Correction-signal rate | Users say the recalled context is wrong, stale, or irrelevant | `memory_feedback_wrong`, `memory_feedback_missing`, or conversation review |
 | Sampled recall usefulness | Audited recalled memories appear relevant and actually help move work forward | Sample audit of recalled memories |
 

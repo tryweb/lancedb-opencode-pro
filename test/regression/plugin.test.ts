@@ -489,11 +489,46 @@ test("recall injection includes memory ids and records recall effectiveness even
     assert.match(recalled[0] ?? "", /\[[^\]]+\] \([^)]*\) /);
 
     const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
-    const summary = parseJson<{ recall: { requested: number; injected: number; returnedResults: number } }>(summaryOutput);
+    const summary = parseJson<{ recall: { requested: number; injected: number; returnedResults: number; auto: { requested: number; injected: number } } }>(summaryOutput);
 
     assert.equal(summary.recall.requested, 1);
     assert.equal(summary.recall.injected, 1);
     assert.equal(summary.recall.returnedResults, 1);
+    assert.equal(summary.recall.auto.requested, 1);
+    assert.equal(summary.recall.auto.injected, 1);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("memory_search emits manual-search recall event and effectiveness summary splits auto and manual", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    await harness.capture("Nginx 502 fixed by increasing proxy_buffer_size and confirming upstream health checks. Resolved successfully.");
+
+    await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute({ query: "Nginx 502 proxy_buffer_size", limit: 5 }, harness.context),
+    );
+
+    await harness.recallSystem();
+
+    const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
+    const summary = parseJson<{
+      recall: {
+        requested: number;
+        auto: { requested: number; injected: number; returnedResults: number };
+        manual: { requested: number; returnedResults: number; hitRate: number };
+        manualRescueRatio: number;
+      };
+    }>(summaryOutput);
+
+    assert.equal(summary.recall.requested, 2);
+    assert.equal(summary.recall.auto.requested, 1);
+    assert.equal(summary.recall.auto.injected, 1);
+    assert.equal(summary.recall.manual.requested, 1);
+    assert.ok(summary.recall.manual.returnedResults >= 0);
+    assert.ok(Math.abs(summary.recall.manualRescueRatio - 1) < 1e-9);
   } finally {
     await harness.cleanup();
   }

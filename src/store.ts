@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { CaptureSkipReason, EffectivenessSummary, MemoryEffectivenessEvent, MemoryRecord, SearchResult } from "./types.js";
+import type { CaptureSkipReason, EffectivenessSummary, MemoryEffectivenessEvent, MemoryRecord, RecallSource, SearchResult } from "./types.js";
 import { cosineSimilarity, tokenize } from "./utils.js";
 
 type LanceModule = typeof import("@lancedb/lancedb");
@@ -88,6 +88,7 @@ export class MemoryStore {
         skipReason: "",
         resultCount: 0,
         injected: false,
+        source: "",
         feedbackType: "",
         helpful: -1,
         reason: "",
@@ -121,6 +122,7 @@ export class MemoryStore {
         skipReason: event.type === "capture" ? event.skipReason ?? "" : "",
         resultCount: event.type === "recall" ? event.resultCount : 0,
         injected: event.type === "recall" ? event.injected : false,
+        source: event.type === "recall" ? event.source ?? "" : "",
         feedbackType: event.type === "feedback" ? event.feedbackType : "",
         helpful: event.type === "feedback" ? (event.helpful === undefined ? -1 : event.helpful ? 1 : 0) : -1,
         reason: event.type === "feedback" ? event.reason ?? "" : "",
@@ -264,6 +266,11 @@ export class MemoryStore {
     let recallRequested = 0;
     let recallInjected = 0;
     let recallReturnedResults = 0;
+    let autoRecallRequested = 0;
+    let autoRecallInjected = 0;
+    let autoRecallReturnedResults = 0;
+    let manualRecallRequested = 0;
+    let manualRecallReturnedResults = 0;
     let feedbackMissing = 0;
     let feedbackWrong = 0;
     let feedbackUsefulPositive = 0;
@@ -285,6 +292,15 @@ export class MemoryStore {
         recallRequested += 1;
         if (event.resultCount > 0) recallReturnedResults += 1;
         if (event.injected) recallInjected += 1;
+        const recallSource = event.source ?? "system-transform";
+        if (recallSource === "manual-search") {
+          manualRecallRequested += 1;
+          if (event.resultCount > 0) manualRecallReturnedResults += 1;
+        } else {
+          autoRecallRequested += 1;
+          if (event.resultCount > 0) autoRecallReturnedResults += 1;
+          if (event.injected) autoRecallInjected += 1;
+        }
       }
 
       if (event.type === "feedback") {
@@ -316,6 +332,19 @@ export class MemoryStore {
         returnedResults: recallReturnedResults,
         hitRate: recallRequested === 0 ? 0 : recallReturnedResults / recallRequested,
         injectionRate: recallRequested === 0 ? 0 : recallInjected / recallRequested,
+        auto: {
+          requested: autoRecallRequested,
+          injected: autoRecallInjected,
+          returnedResults: autoRecallReturnedResults,
+          hitRate: autoRecallRequested === 0 ? 0 : autoRecallReturnedResults / autoRecallRequested,
+          injectionRate: autoRecallRequested === 0 ? 0 : autoRecallInjected / autoRecallRequested,
+        },
+        manual: {
+          requested: manualRecallRequested,
+          returnedResults: manualRecallReturnedResults,
+          hitRate: manualRecallRequested === 0 ? 0 : manualRecallReturnedResults / manualRecallRequested,
+        },
+        manualRescueRatio: autoRecallRequested === 0 ? 0 : manualRecallRequested / autoRecallRequested,
       },
       feedback: {
         missing: feedbackMissing,
@@ -408,6 +437,7 @@ export class MemoryStore {
         "skipReason",
         "resultCount",
         "injected",
+        "source",
         "feedbackType",
         "helpful",
         "reason",
@@ -528,11 +558,14 @@ function normalizeEventRow(row: Record<string, unknown>): MemoryEffectivenessEve
   }
 
   if (row.type === "recall") {
+    const sourceRaw = typeof row.source === "string" && row.source.length > 0 ? row.source : "system-transform";
+    const source: RecallSource = sourceRaw === "manual-search" ? "manual-search" : "system-transform";
     return {
       ...base,
       type: "recall",
       resultCount: Number(row.resultCount ?? 0),
       injected: Boolean(row.injected),
+      source,
     };
   }
 

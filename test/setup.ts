@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { MemoryStore } from "../src/store.js";
-import type { EffectivenessSummary, MemoryCategory, MemoryEffectivenessEvent, MemoryRecord } from "../src/types.js";
+import type { EffectivenessSummary, MemoryCategory, MemoryEffectivenessEvent, MemoryRecord, RecallSource } from "../src/types.js";
 
 const DEFAULT_VECTOR_DIM = 384;
 const DEFAULT_EMBEDDING_MODEL = "test-embedding-model";
@@ -85,6 +85,8 @@ export function createTestEvent(overrides: Partial<MemoryEffectivenessEvent> = {
   };
 
   if (overrides.type === "recall") {
+    const sourceRaw = overrides.source;
+    const source: RecallSource = sourceRaw === "manual-search" ? "manual-search" : "system-transform";
     return {
       id: overrides.id ?? base.id,
       scope: overrides.scope ?? base.scope,
@@ -96,6 +98,7 @@ export function createTestEvent(overrides: Partial<MemoryEffectivenessEvent> = {
       type: "recall",
       resultCount: overrides.resultCount ?? 1,
       injected: overrides.injected ?? true,
+      source,
     };
   }
 
@@ -147,6 +150,19 @@ export function createEffectivenessSummary(overrides: Partial<EffectivenessSumma
       returnedResults: 0,
       hitRate: 0,
       injectionRate: 0,
+      auto: {
+        requested: 0,
+        injected: 0,
+        returnedResults: 0,
+        hitRate: 0,
+        injectionRate: 0,
+      },
+      manual: {
+        requested: 0,
+        returnedResults: 0,
+        hitRate: 0,
+      },
+      manualRescueRatio: 0,
     },
     feedback: {
       missing: 0,

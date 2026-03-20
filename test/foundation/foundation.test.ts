@@ -242,6 +242,36 @@ test("effectiveness summary aggregates capture recall and feedback metrics", asy
   }
 });
 
+test("auto and manual recall events are stored and scoped correctly and summarize separately", async () => {
+  const { store, dbPath } = await createTestStore();
+
+  try {
+    await store.putEvent(createTestEvent({ type: "recall", scope: "project:split", source: "system-transform", resultCount: 2, injected: true }));
+    await store.putEvent(createTestEvent({ type: "recall", scope: "project:split", source: "manual-search", resultCount: 3, injected: false }));
+    await store.putEvent(createTestEvent({ type: "recall", scope: "project:split", source: "manual-search", resultCount: 0, injected: false }));
+
+    const summary = await store.summarizeEvents("project:split", false);
+
+    assert.equal(summary.recall.requested, 3);
+    assert.equal(summary.recall.injected, 1);
+    assert.equal(summary.recall.returnedResults, 2);
+
+    assert.equal(summary.recall.auto.requested, 1);
+    assert.equal(summary.recall.auto.injected, 1);
+    assert.equal(summary.recall.auto.returnedResults, 1);
+    assert.ok(Math.abs(summary.recall.auto.hitRate - 1) < 1e-9);
+    assert.ok(Math.abs(summary.recall.auto.injectionRate - 1) < 1e-9);
+
+    assert.equal(summary.recall.manual.requested, 2);
+    assert.equal(summary.recall.manual.returnedResults, 1);
+    assert.ok(Math.abs(summary.recall.manual.hitRate - 0.5) < 1e-9);
+
+    assert.ok(Math.abs(summary.recall.manualRescueRatio - 2) < 1e-9);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
 test("search scoring uses normalized RRF fusion when recency and importance boosts are disabled", async () => {
   const { store, dbPath } = await createTestStore();
 

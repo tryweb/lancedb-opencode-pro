@@ -272,7 +272,7 @@ Example output:
 ```json
 {
   "scope": "project:my-project",
-  "totalEvents": 12,
+  "totalEvents": 14,
   "capture": {
     "considered": 4,
     "stored": 3,
@@ -283,11 +283,24 @@ Example output:
     }
   },
   "recall": {
-    "requested": 3,
+    "requested": 4,
     "injected": 2,
-    "returnedResults": 2,
-    "hitRate": 0.67,
-    "injectionRate": 0.67
+    "returnedResults": 3,
+    "hitRate": 0.75,
+    "injectionRate": 0.5,
+    "auto": {
+      "requested": 3,
+      "injected": 2,
+      "returnedResults": 2,
+      "hitRate": 0.67,
+      "injectionRate": 0.67
+    },
+    "manual": {
+      "requested": 1,
+      "returnedResults": 1,
+      "hitRate": 1
+    },
+    "manualRescueRatio": 0.33
   },
   "feedback": {
     "missing": 1,
@@ -306,7 +319,10 @@ Example output:
 Key fields:
 
 - `capture.successRate`: how often a considered candidate was stored.
-- `recall.hitRate`: how often a recall request returned at least one result.
+- `recall.hitRate`: blended rate across auto and manual recall — how often any recall request returned at least one result.
+- `recall.auto.*`: metrics for automatic recall injected into the system prompt during `experimental.chat.system.transform`.
+- `recall.manual.*`: metrics for user-initiated `memory_search` calls; `injected` is always false for manual searches.
+- `recall.manualRescueRatio`: `manual.requested / auto.requested` — a proxy for how often users still need to search manually despite automatic recall.
 - `feedback.falsePositiveRate`: wrong-memory reports divided by stored memories.
 - `feedback.falseNegativeRate`: missing-memory reports relative to capture attempts.
 
@@ -315,6 +331,8 @@ Key fields:
 In real OpenCode usage, auto-capture and recall happen in the background, so explicit `memory_feedback_*` events are often sparse.
 
 - Treat `capture.*` and `recall.*` as system-health metrics: they show whether the memory pipeline is running.
+- Treat `recall.auto.*` and `recall.manual.*` separately: auto metrics reflect pipeline health; manual metrics reflect whether users still need to rescue context manually.
+- Treat `recall.manualRescueRatio` as a proxy for manual rescue rate: a high ratio suggests automatic recall is not surfacing relevant context on its own.
 - Treat repeated-context reduction, clarification burden, manual memory rescue, correction signals, and sampled audits as product-value signals: they show whether memory actually helped the user.
 - Treat `feedback.* = 0` as insufficient evidence, not proof that memory quality is good.
 - Treat a high `recall.hitRate` or `recall.injectionRate` as recall availability only; those values do not prove usefulness by themselves.
