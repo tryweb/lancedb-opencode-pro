@@ -1,6 +1,6 @@
 {
   "name": "lancedb-opencode-pro",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "LanceDB-backed long-term memory provider for OpenCode",
   "type": "module",
   "main": "dist/index.js",
@@ -63,5 +63,10 @@
   "devDependencies": {
     "@types/node": "^22.13.9",
     "typescript": "^5.8.2"
-  }
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "author": ""
 }

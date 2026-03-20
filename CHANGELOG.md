@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.1.5] - 2026-03-20
+
+### Added
+- `RecallSource` type to distinguish `"system-transform"` (auto recall) from `"manual-search"` (user-initiated).
+- `memory_search` tool now emits a structured recall event with `source: "manual-search"` and `injected: false`.
+- `EffectivenessSummary.recall` now includes `auto` and `manual` sub-structures with independent `hitRate`/`injectionRate`, plus `manualRescueRatio`.
+
+### Changed
+- `recall.hitRate` and `recall.injectionRate` top-level fields are retained as blended totals for backward compatibility; consumers that need precise breakdowns should read `recall.auto.*` and `recall.manual.*`.
+- `docs/operations.md` proxy metrics table marks manual memory rescue rate as instrumented via `recall.manual.requested` and `recall.manualRescueRatio`.
+
+---
+
 ## [0.1.4] - 2026-03-19
 
 ### Added
