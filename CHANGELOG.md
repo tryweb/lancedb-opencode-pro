@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.1.6] - 2026-03-20
+
+### Fixed
+- Patch pre-`0.1.5` `effectiveness_events` tables during store initialization so upgraded installs automatically add the missing `source` column before new recall events are written.
+- Preserve backward-compatible recall summaries for upgraded databases by treating legacy rows without `source` as `"system-transform"` while allowing new `"manual-search"` events to persist normally.
+- Add foundation and regression coverage for the schema-upgrade path so release verification catches missing-column failures before publish.
+
+### Changed
+- Archived and synced OpenSpec change `2026-03-20-add-effectiveness-schema-upgrade` into the main memory effectiveness specification.
+
+---
+
 ## [0.1.5] - 2026-03-20
 
 ### Added
