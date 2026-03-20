@@ -72,6 +72,7 @@ const plugin: Plugin = async (input) => {
       await state.store.putEvent({
         id: generateId(),
         type: "recall",
+        source: "system-transform",
         scope: activeScope,
         sessionID: eventInput.sessionID,
         timestamp: Date.now(),
@@ -126,6 +127,18 @@ const plugin: Plugin = async (input) => {
             recencyBoost: state.config.retrieval.recencyBoost,
             recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
             importanceWeight: state.config.retrieval.importanceWeight,
+          });
+
+          await state.store.putEvent({
+            id: generateId(),
+            type: "recall",
+            source: "manual-search",
+            scope: activeScope,
+            sessionID: context.sessionID,
+            timestamp: Date.now(),
+            resultCount: results.length,
+            injected: false,
+            metadataJson: JSON.stringify({ source: "manual-search" }),
           });
 
           if (results.length === 0) return "No relevant memory found.";
