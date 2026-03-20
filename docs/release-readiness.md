@@ -54,7 +54,9 @@ Key outputs:
 | Users can report missing memory that should have been stored | `test:regression` (`feedback commands persist...`) | Automated |
 | Users can report stored memory that should not have been kept | `test:regression` (`feedback commands persist...`) | Automated |
 | Users can report whether recalled memory was helpful | `test:regression` (`feedback commands persist...`) | Automated |
-| Operators can inspect machine-readable effectiveness summary output | `test:regression` (`capture events...`, `recall injection...`, `feedback commands persist...`) | Automated |
+| Operators can inspect machine-readable effectiveness summary output | `test:regression` (`capture events...`, `recall injection...`, `feedback commands persist...`, `memory_search emits manual-search recall event...`) | Automated |
+| Recall events distinguish auto-recall from manual search via source field | `test:foundation` (`auto and manual recall events...`), `test:regression` (`memory_search emits manual-search recall event...`) | Automated |
+| `recall.manualRescueRatio` is computed and reported in effectiveness summary | `test:foundation` (`auto and manual recall events...`), `test:regression` (`memory_search emits manual-search recall event...`) | Automated |
 | Missing FTS index does not break retrieval | Not explicitly exercised by dedicated failure-path test | Manual-only (pending automation) |
 | Missing embedding backend does not crash plugin hooks | Not explicitly exercised by dedicated failure-path test | Manual-only (pending automation) |
 | Docker build and up succeeds | `verify:full` run | Automated |
@@ -69,7 +71,7 @@ Implemented automated coverage by phase:
 - Phase 0: vector dimension consistency, write-read cycle, scope isolation, timestamp ordering
 - Phase 1: Recall@K and Robustness-δ@K with synthetic fixture generation
 - Phase 3: auto-capture extraction, minimum length, category behavior, delete/clear safety, pruning
-- Phase 3: effectiveness event emission, recalled-memory id visibility, feedback command persistence, effectiveness summary output
+- Phase 3: effectiveness event emission, recalled-memory id visibility, feedback command persistence, effectiveness summary output, auto/manual recall split, manualRescueRatio computation
 - Phase 4.1: latency benchmarks (search p50/p99 hard gates, insert/list informational metrics)
 
 Still manual or not yet automated:
@@ -92,8 +94,8 @@ Before archive/ship, retain these as explicit manual checks:
 
 Interpret `memory_effectiveness` in two layers:
 
-- **System health**: capture success, skip reasons, recall hit rate, and recall injection rate.
-- **Product value**: repeated-context reduction, clarification burden reduction, manual memory rescue rate, correction-signal rate, and sampled recall usefulness.
+- **System health**: capture success, skip reasons, recall hit rate, recall injection rate, `recall.auto.*`, `recall.manual.*`, and `recall.manualRescueRatio`.
+- **Product value**: repeated-context reduction, clarification burden reduction, manual memory rescue rate (now instrumented via `recall.manualRescueRatio`), correction-signal rate, and sampled recall usefulness.
 
 Review rules:
 
