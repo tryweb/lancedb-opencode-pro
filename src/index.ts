@@ -164,7 +164,7 @@ const plugin: Plugin = async (input) => {
       memory_delete: tool({
         description: "Delete one memory entry by id",
         args: {
-          id: tool.schema.string().min(6),
+          id: tool.schema.string().min(8),
           scope: tool.schema.string().optional(),
           confirm: tool.schema.boolean().default(false),
         },
@@ -254,7 +254,7 @@ const plugin: Plugin = async (input) => {
       memory_feedback_wrong: tool({
         description: "Record feedback for memory that should not be stored",
         args: {
-          id: tool.schema.string().min(6),
+          id: tool.schema.string().min(8),
           reason: tool.schema.string().optional(),
           scope: tool.schema.string().optional(),
         },
@@ -284,7 +284,7 @@ const plugin: Plugin = async (input) => {
       memory_feedback_useful: tool({
         description: "Record whether a recalled memory was helpful",
         args: {
-          id: tool.schema.string().min(6),
+          id: tool.schema.string().min(8),
           helpful: tool.schema.boolean(),
           scope: tool.schema.string().optional(),
         },
@@ -327,7 +327,7 @@ const plugin: Plugin = async (input) => {
       memory_scope_promote: tool({
         description: "Promote a memory from project scope to global scope for cross-project sharing",
         args: {
-          id: tool.schema.string().min(6),
+          id: tool.schema.string().min(8),
           confirm: tool.schema.boolean().default(false),
         },
         execute: async (args, context) => {
@@ -352,7 +352,7 @@ const plugin: Plugin = async (input) => {
       memory_scope_demote: tool({
         description: "Demote a memory from global scope to project scope",
         args: {
-          id: tool.schema.string().min(6),
+          id: tool.schema.string().min(8),
           confirm: tool.schema.boolean().default(false),
           scope: tool.schema.string().optional(),
         },

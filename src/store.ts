@@ -222,7 +222,7 @@ export class MemoryStore {
 
   async deleteById(id: string, scopes: string[]): Promise<boolean> {
     const rows = await this.readByScopes(scopes);
-    const match = rows.find((row) => row.id === id);
+    const match = rows.find((row) => this.matchesId(row.id, id));
     if (!match) return false;
     await this.requireTable().delete(`id = '${escapeSql(match.id)}'`);
     this.invalidateScope(match.scope);
@@ -231,10 +231,10 @@ export class MemoryStore {
 
   async updateMemoryScope(id: string, newScope: string, scopes: string[]): Promise<boolean> {
     const rows = await this.readByScopes(scopes);
-    const match = rows.find((row) => row.id === id);
+    const match = rows.find((row) => this.matchesId(row.id, id));
     if (!match) return false;
 
-    await this.requireTable().delete(`id = '${escapeSql(id)}'`);
+    await this.requireTable().delete(`id = '${escapeSql(match.id)}'`);
     this.invalidateScope(match.scope);
 
     await this.requireTable().add([{ ...match, scope: newScope }]);
@@ -282,10 +282,15 @@ export class MemoryStore {
     return rows.filter((row) => row.vectorDim !== expectedDim).length;
   }
 
+  private matchesId(candidateId: string, query: string): boolean {
+    if (query.length >= 36) return candidateId === query;
+    return candidateId.startsWith(query);
+  }
+
   async hasMemory(id: string, scopes: string[]): Promise<boolean> {
     for (let attempt = 0; attempt < 3; attempt++) {
       const rows = await this.readByScopes(scopes);
-      if (rows.some((row) => row.id === id)) {
+      if (rows.some((row) => this.matchesId(row.id, id))) {
         return true;
       }
       if (attempt < 2) {
@@ -297,7 +302,7 @@ export class MemoryStore {
 
   async updateMemoryUsage(id: string, projectScope: string, scopes: string[]): Promise<void> {
     const rows = await this.readByScopes(scopes);
-    const match = rows.find((row) => row.id === id);
+    const match = rows.find((row) => this.matchesId(row.id, id));
     if (!match) return;
 
     const now = Date.now();
@@ -321,7 +326,7 @@ export class MemoryStore {
       }
     }
 
-    await this.requireTable().delete(`id = '${escapeSql(id)}'`);
+    await this.requireTable().delete(`id = '${escapeSql(match.id)}'`);
     this.invalidateScope(match.scope);
 
     await this.requireTable().add([{
