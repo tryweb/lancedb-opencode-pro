@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.2] - 2026-03-21
+
+### Fixed
+
+- `memory_scope_promote`, `memory_delete`, `memory_feedback_wrong`, `memory_feedback_useful` now accept 8-character short IDs (prefix of UUID) in addition to full 36-character UUIDs. Previously, passing a short ID always returned "not found" even though `memory_search` could find the same memory.
+- `id` parameter minimum length raised from 6 to 8 characters on all memory tools.
+- Fix: DELETE inside `updateMemoryScope` and `updateMemoryUsage` now uses resolved `match.id`, not the prefix argument.
+
+---
+
 ## [0.2.1] - 2026-03-21
 
 ### Fixed
