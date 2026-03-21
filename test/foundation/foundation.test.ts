@@ -10,6 +10,7 @@ import {
   createTestStore,
   createVector,
   seedLegacyEffectivenessEventsTable,
+  seedLegacyMemoriesTable,
 } from "../setup.js";
 
 test("write-read persistence keeps field integrity across multiple scopes", async () => {
@@ -297,6 +298,34 @@ test("store init patches legacy effectiveness_events schema before writing recal
     assert.ok(patchedEvent);
     assert.equal(patchedEvent?.type, "recall");
     assert.equal(patchedEvent?.source, "manual-search");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("store init patches legacy memories schema by adding lastRecalled recallCount and projectCount", async () => {
+  const dbPath = await createTempDbPath();
+
+  try {
+    await seedLegacyMemoriesTable(dbPath);
+    const { store } = await createTestStore(dbPath);
+
+    const results = await store.search({
+      query: "legacy memory",
+      queryVector: createVector(384, 0.5),
+      scopes: ["project:legacy"],
+      limit: 5,
+      vectorWeight: 0.7,
+      bm25Weight: 0.3,
+      minScore: 0,
+    });
+
+    assert.equal(results.length, 1);
+    const record = results[0].record;
+    assert.equal(record.id, "legacy-memory-1");
+    assert.equal(record.lastRecalled, 0, "patched column should default to 0");
+    assert.equal(record.recallCount, 0, "patched column should default to 0");
+    assert.equal(record.projectCount, 0, "patched column should default to 0");
   } finally {
     await cleanupDbPath(dbPath);
   }

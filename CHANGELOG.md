@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.1] - 2026-03-21
+
+### Fixed
+
+- Schema migration: databases created with v0.1.x now automatically receive the `lastRecalled`, `recallCount`, and `projectCount` columns on first startup with v0.2.x. Without this patch, any existing database would fail with a LanceDB schema error (`No field named "lastRecalled"`) on every query.
+
+---
+
 ## [0.2.0] - 2026-03-21
 
 ### Added
