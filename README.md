@@ -48,6 +48,9 @@ If you already use other plugins, keep them and append `"lancedb-opencode-pro"`.
     "importanceWeight": 0.4
   },
   "includeGlobalScope": true,
+  "globalDetectionThreshold": 2,
+  "globalDiscountFactor": 0.7,
+  "unusedDaysThreshold": 30,
   "minCaptureChars": 80,
   "maxEntriesPerScope": 3000
 }
@@ -184,6 +187,9 @@ Create `~/.config/opencode/lancedb-opencode-pro.json`:
     "importanceWeight": 0.4
   },
   "includeGlobalScope": true,
+  "globalDetectionThreshold": 2,
+  "globalDiscountFactor": 0.7,
+  "unusedDaysThreshold": 30,
   "minCaptureChars": 80,
   "maxEntriesPerScope": 3000
 }
@@ -229,6 +235,9 @@ Supported environment variables:
 - `LANCEDB_OPENCODE_PRO_RECENCY_HALF_LIFE_HOURS`
 - `LANCEDB_OPENCODE_PRO_IMPORTANCE_WEIGHT`
 - `LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE`
+- `LANCEDB_OPENCODE_PRO_GLOBAL_DETECTION_THRESHOLD`
+- `LANCEDB_OPENCODE_PRO_GLOBAL_DISCOUNT_FACTOR`
+- `LANCEDB_OPENCODE_PRO_UNUSED_DAYS_THRESHOLD`
 - `LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS`
 - `LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE`
 
@@ -237,6 +246,7 @@ Supported environment variables:
 - Auto-capture of durable outcomes from completed assistant responses.
 - Hybrid retrieval (vector + lexical) for future context injection.
 - Project-scope memory isolation (`project:*` + optional `global`).
+- Cross-project memory sharing via global scope with automatic detection.
 - Memory tools:
   - `memory_search`
   - `memory_delete`
@@ -246,6 +256,9 @@ Supported environment variables:
   - `memory_feedback_wrong`
   - `memory_feedback_useful`
   - `memory_effectiveness`
+  - `memory_scope_promote`
+  - `memory_scope_demote`
+  - `memory_global_list`
   - `memory_port_plan`
 
 ## Memory Effectiveness Feedback
@@ -371,6 +384,9 @@ Example sidecar:
     "importanceWeight": 0.4
   },
   "includeGlobalScope": true,
+  "globalDetectionThreshold": 2,
+  "globalDiscountFactor": 0.7,
+  "unusedDaysThreshold": 30,
   "minCaptureChars": 80,
   "maxEntriesPerScope": 3000
 }
