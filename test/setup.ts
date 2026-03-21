@@ -36,6 +36,26 @@ export async function cleanupDbPath(dbPath: string): Promise<void> {
   }
 }
 
+export async function seedLegacyMemoriesTable(dbPath: string, scope = "project:legacy"): Promise<void> {
+  const lancedb = await import("@lancedb/lancedb");
+  const connection = await lancedb.connect(dbPath);
+  await connection.createTable("memories", [
+    {
+      id: "legacy-memory-1",
+      text: "Legacy memory without usage tracking fields",
+      vector: Array.from({ length: DEFAULT_VECTOR_DIM }, () => 0.1),
+      category: "fact",
+      scope,
+      importance: 0.5,
+      timestamp: 1_000,
+      schemaVersion: 1,
+      embeddingModel: "test-embedding-model",
+      vectorDim: DEFAULT_VECTOR_DIM,
+      metadataJson: "{}",
+    },
+  ]);
+}
+
 export async function seedLegacyEffectivenessEventsTable(dbPath: string, scope = "project:legacy"): Promise<void> {
   const lancedb = await import("@lancedb/lancedb");
   const connection = await lancedb.connect(dbPath);

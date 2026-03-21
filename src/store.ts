@@ -105,6 +105,7 @@ export class MemoryStore {
       await this.eventTable.delete("id = '__bootstrap__'");
     }
 
+    await this.ensureMemoriesTableCompatibility();
     await this.ensureEventTableCompatibility();
 
     await this.ensureIndexes();
@@ -590,6 +591,37 @@ export class MemoryStore {
     } catch (error) {
       this.indexState.fts = false;
       this.indexState.ftsError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  private async ensureMemoriesTableCompatibility(): Promise<void> {
+    const table = this.requireTable();
+    const schema = await table.schema();
+    const fieldNames = new Set(schema.fields.map((field) => field.name));
+
+    const missing: Array<{ name: string; valueSql: string }> = [];
+    if (!fieldNames.has("lastRecalled")) {
+      missing.push({ name: "lastRecalled", valueSql: "CAST(0 AS BIGINT)" });
+    }
+    if (!fieldNames.has("recallCount")) {
+      missing.push({ name: "recallCount", valueSql: "CAST(0 AS INT)" });
+    }
+    if (!fieldNames.has("projectCount")) {
+      missing.push({ name: "projectCount", valueSql: "CAST(0 AS INT)" });
+    }
+
+    if (missing.length === 0) {
+      return;
+    }
+
+    try {
+      await table.addColumns(missing);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      const names = missing.map((col) => col.name).join(", ");
+      throw new Error(
+        `Failed to patch ${TABLE_NAME} schema for columns [${names}]: ${reason}`,
+      );
     }
   }
 
