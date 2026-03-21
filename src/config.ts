@@ -139,6 +139,10 @@ function validateEmbeddingConfig(embedding: MemoryRuntimeConfig["embedding"]): v
 }
 
 function loadSidecarConfig(worktree?: string): Record<string, unknown> {
+  if (process.env.LANCEDB_OPENCODE_PRO_SKIP_SIDECAR === "true") {
+    return {};
+  }
+
   const configPath = firstString(process.env.LANCEDB_OPENCODE_PRO_CONFIG_PATH);
   const candidates = [
     join(expandHomePath("~/.opencode"), SIDECAR_FILE),

@@ -113,6 +113,7 @@ async function createPluginHarness(options?: {
   ];
   const sessionDirectory = options?.sessionDirectory ?? WORKTREE;
   const envValues: Record<string, string> = {
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
     LANCEDB_OPENCODE_PRO_DB_PATH: dbPath,
     LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS: String(memoryConfig.memory.minCaptureChars),
     LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE: String(memoryConfig.memory.maxEntriesPerScope),
@@ -167,9 +168,6 @@ async function createPluginHarness(options?: {
   assert.ok(hooks?.event, "event hook should exist");
   assert.ok(hooks?.["experimental.text.complete"], "text complete hook should exist");
   assert.ok(hooks?.["experimental.chat.system.transform"], "system transform hook should exist");
-  if (hooks.config) {
-    await hooks.config(memoryConfig as unknown as Parameters<NonNullable<typeof hooks.config>>[0]);
-  }
 
   const toolHooks = hooks.tool;
   const eventHook = hooks.event;
@@ -294,41 +292,51 @@ test("openai provider path captures and recalls memory with the same tool surfac
   }
 });
 
-test("resolveMemoryConfig fails fast for openai without apiKey", () => {
-  assert.throws(
-    () =>
-      resolveMemoryConfig(
-        {
-          memory: {
-            provider: "lancedb-opencode-pro",
-            embedding: {
-              provider: "openai",
-              model: "text-embedding-3-small",
-            },
-          },
-        } as unknown as Parameters<typeof resolveMemoryConfig>[0],
-        undefined,
-      ),
-    /requires apiKey/i,
+test("resolveMemoryConfig fails fast for openai without apiKey", async () => {
+  await withPatchedEnv(
+    {
+      LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER: "openai",
+      LANCEDB_OPENCODE_PRO_OPENAI_MODEL: "text-embedding-3-small",
+      LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    },
+    async () => {
+      assert.throws(
+        () =>
+          resolveMemoryConfig(
+            {
+              memory: {
+                provider: "lancedb-opencode-pro",
+              },
+            } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+            undefined,
+          ),
+        /requires apiKey/i,
+      );
+    },
   );
 });
 
-test("resolveMemoryConfig fails fast for openai without model", () => {
-  assert.throws(
-    () =>
-      resolveMemoryConfig(
-        {
-          memory: {
-            provider: "lancedb-opencode-pro",
-            embedding: {
-              provider: "openai",
-              apiKey: "test-openai-api-key",
-            },
-          },
-        } as unknown as Parameters<typeof resolveMemoryConfig>[0],
-        undefined,
-      ),
-    /requires model/i,
+test("resolveMemoryConfig fails fast for openai without model", async () => {
+  await withPatchedEnv(
+    {
+      LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER: "openai",
+      LANCEDB_OPENCODE_PRO_OPENAI_API_KEY: "test-openai-api-key",
+      LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    },
+    async () => {
+      assert.throws(
+        () =>
+          resolveMemoryConfig(
+            {
+              memory: {
+                provider: "lancedb-opencode-pro",
+              },
+            } as unknown as Parameters<typeof resolveMemoryConfig>[0],
+            undefined,
+          ),
+        /requires model/i,
+      );
+    },
   );
 });
 
@@ -572,11 +580,26 @@ test("feedback commands persist missing wrong and useful signals", async () => {
   const harness = await createPluginHarness();
 
   try {
+    const statsBeforeCapture = await withPatchedFetch(() =>
+      harness.toolHooks.memory_stats.execute({}, harness.context),
+    );
+    const parsedStatsBefore = JSON.parse(statsBeforeCapture) as { dbPath: string; recentCount: number };
+    assert.equal(parsedStatsBefore.dbPath, harness.dbPath, "Stats dbPath should match harness dbPath before capture");
+
     await harness.capture("Resolved successfully after rotating the stale token and reloading the API gateway config.");
+
+    const statsAfterCapture = await withPatchedFetch(() =>
+      harness.toolHooks.memory_stats.execute({}, harness.context),
+    );
+    const parsedStatsAfter = JSON.parse(statsAfterCapture) as { dbPath: string; recentCount: number };
+    assert.equal(parsedStatsAfter.dbPath, harness.dbPath, "Stats dbPath should match harness dbPath after capture");
+    assert.equal(parsedStatsAfter.recentCount, 1, "Should have 1 memory after capture");
+
     const searchOutput = await withPatchedFetch(() =>
       harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
     );
     const recordId = searchOutput.match(/\[([^\]]+)\]/)?.[1] ?? "";
+    assert.ok(recordId, "Should find a record ID in search output");
 
     const missingOutput = await withPatchedFetch(() =>
       harness.toolHooks.memory_feedback_missing.execute(
@@ -589,7 +612,7 @@ test("feedback commands persist missing wrong and useful signals", async () => {
     const wrongOutput = await withPatchedFetch(() =>
       harness.toolHooks.memory_feedback_wrong.execute({ id: recordId, reason: "temporary workaround" }, harness.context),
     );
-    assert.match(wrongOutput, new RegExp(recordId));
+    assert.match(wrongOutput, /Recorded wrong-memory feedback/);
 
     const usefulOutput = await withPatchedFetch(() =>
       harness.toolHooks.memory_feedback_useful.execute({ id: recordId, helpful: true }, harness.context),
@@ -598,6 +621,8 @@ test("feedback commands persist missing wrong and useful signals", async () => {
 
     const summaryOutput = await withPatchedFetch(() => harness.toolHooks.memory_effectiveness.execute({}, harness.context));
     const summary = parseJson<{
+      scope: string;
+      totalEvents: number;
       feedback: {
         missing: number;
         wrong: number;

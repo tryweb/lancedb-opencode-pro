@@ -21,7 +21,19 @@ export async function createTestStore(dbPath?: string): Promise<{ store: MemoryS
 }
 
 export async function cleanupDbPath(dbPath: string): Promise<void> {
-  await rm(dbPath, { recursive: true, force: true });
+  // Small delay to allow LanceDB to finish any pending I/O operations
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  try {
+    await rm(dbPath, { recursive: true, force: true });
+  } catch (error: unknown) {
+    // Retry once after a longer delay if ENOTEMPTY (race condition with LanceDB)
+    if (error instanceof Error && error.message.includes("ENOTEMPTY")) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await rm(dbPath, { recursive: true, force: true });
+    } else {
+      throw error;
+    }
+  }
 }
 
 export async function seedLegacyEffectivenessEventsTable(dbPath: string, scope = "project:legacy"): Promise<void> {
