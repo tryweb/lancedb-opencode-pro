@@ -282,8 +282,16 @@ export class MemoryStore {
   }
 
   async hasMemory(id: string, scopes: string[]): Promise<boolean> {
-    const rows = await this.readByScopes(scopes);
-    return rows.some((row) => row.id === id);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const rows = await this.readByScopes(scopes);
+      if (rows.some((row) => row.id === id)) {
+        return true;
+      }
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+    return false;
   }
 
   async updateMemoryUsage(id: string, projectScope: string, scopes: string[]): Promise<void> {
@@ -543,6 +551,9 @@ export class MemoryStore {
         "scope",
         "importance",
         "timestamp",
+        "lastRecalled",
+        "recallCount",
+        "projectCount",
         "schemaVersion",
         "embeddingModel",
         "vectorDim",
