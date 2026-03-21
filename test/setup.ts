@@ -63,6 +63,9 @@ export function createTestRecord(overrides: Partial<MemoryRecord> = {}): MemoryR
     scope: overrides.scope ?? "project:test",
     importance: overrides.importance ?? 0.5,
     timestamp: overrides.timestamp ?? Date.now(),
+    lastRecalled: overrides.lastRecalled ?? 0,
+    recallCount: overrides.recallCount ?? 0,
+    projectCount: overrides.projectCount ?? 0,
     schemaVersion: overrides.schemaVersion ?? 1,
     embeddingModel: overrides.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
     vectorDim: overrides.vectorDim ?? vector.length,
@@ -77,6 +80,9 @@ export function assertRecordsMatch(actual: MemoryRecord, expected: MemoryRecord)
   assert.equal(actual.scope, expected.scope);
   assert.equal(actual.importance, expected.importance);
   assert.equal(actual.timestamp, expected.timestamp);
+  assert.equal(actual.lastRecalled, expected.lastRecalled);
+  assert.equal(actual.recallCount, expected.recallCount);
+  assert.equal(actual.projectCount, expected.projectCount);
   assert.equal(actual.schemaVersion, expected.schemaVersion);
   assert.equal(actual.embeddingModel, expected.embeddingModel);
   assert.equal(actual.vectorDim, expected.vectorDim);

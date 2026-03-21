@@ -89,6 +89,19 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       importanceWeight,
     },
     includeGlobalScope: toBoolean(process.env.LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE ?? raw.includeGlobalScope, true),
+    globalDetectionThreshold: Math.max(
+      1,
+      Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_GLOBAL_DETECTION_THRESHOLD ?? raw.globalDetectionThreshold, 2)),
+    ),
+    globalDiscountFactor: clamp(
+      toNumber(process.env.LANCEDB_OPENCODE_PRO_GLOBAL_DISCOUNT_FACTOR ?? raw.globalDiscountFactor, 0.7),
+      0,
+      1,
+    ),
+    unusedDaysThreshold: Math.max(
+      1,
+      Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_UNUSED_DAYS_THRESHOLD ?? raw.unusedDaysThreshold, 30)),
+    ),
     minCaptureChars: Math.max(
       30,
       Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS ?? raw.minCaptureChars, 80)),

@@ -18,6 +18,8 @@ export type FeedbackType = "missing" | "wrong" | "useful";
 
 export type RecallSource = "system-transform" | "manual-search";
 
+export type MemoryScope = "project" | "global";
+
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
   model: string;
@@ -43,6 +45,9 @@ export interface MemoryRuntimeConfig {
   embedding: EmbeddingConfig;
   retrieval: RetrievalConfig;
   includeGlobalScope: boolean;
+  globalDetectionThreshold: number;
+  globalDiscountFactor: number;
+  unusedDaysThreshold: number;
   minCaptureChars: number;
   maxEntriesPerScope: number;
 }
@@ -55,6 +60,9 @@ export interface MemoryRecord {
   scope: string;
   importance: number;
   timestamp: number;
+  lastRecalled: number;
+  recallCount: number;
+  projectCount: number;
   schemaVersion: number;
   embeddingModel: string;
   vectorDim: number;

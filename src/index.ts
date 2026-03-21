@@ -4,7 +4,7 @@ import type { Part, TextPart } from "@opencode-ai/sdk";
 import { resolveMemoryConfig } from "./config.js";
 import { createEmbedder } from "./embedder.js";
 import type { Embedder } from "./embedder.js";
-import { extractCaptureCandidate } from "./extract.js";
+import { extractCaptureCandidate, isGlobalCandidate } from "./extract.js";
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
@@ -67,6 +67,7 @@ const plugin: Plugin = async (input) => {
         recencyBoost: state.config.retrieval.recencyBoost,
         recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
         importanceWeight: state.config.retrieval.importanceWeight,
+        globalDiscountFactor: state.config.globalDiscountFactor,
       });
 
       await state.store.putEvent({
@@ -85,6 +86,10 @@ const plugin: Plugin = async (input) => {
       });
 
       if (results.length === 0) return;
+
+      for (const result of results) {
+        state.store.updateMemoryUsage(result.record.id, activeScope, scopes).catch(() => {});
+      }
 
       const memoryBlock = [
         "[Memory Recall - optional historical context]",
@@ -127,6 +132,7 @@ const plugin: Plugin = async (input) => {
             recencyBoost: state.config.retrieval.recencyBoost,
             recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
             importanceWeight: state.config.retrieval.importanceWeight,
+            globalDiscountFactor: state.config.globalDiscountFactor,
           });
 
           await state.store.putEvent({
@@ -142,6 +148,10 @@ const plugin: Plugin = async (input) => {
           });
 
           if (results.length === 0) return "No relevant memory found.";
+
+          for (const result of results) {
+            state.store.updateMemoryUsage(result.record.id, activeScope, scopes).catch(() => {});
+          }
 
           return results
             .map((item, idx) => {
@@ -314,6 +324,107 @@ const plugin: Plugin = async (input) => {
           return JSON.stringify(summary, null, 2);
         },
       }),
+      memory_scope_promote: tool({
+        description: "Promote a memory from project scope to global scope for cross-project sharing",
+        args: {
+          id: tool.schema.string().min(6),
+          confirm: tool.schema.boolean().default(false),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          if (!args.confirm) {
+            return "Rejected: memory_scope_promote requires confirm=true.";
+          }
+          const activeScope = deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
+          const exists = await state.store.hasMemory(args.id, scopes);
+          if (!exists) {
+            return `Memory ${args.id} not found in current scope.`;
+          }
+          const updated = await state.store.updateMemoryScope(args.id, "global", scopes);
+          if (!updated) {
+            return `Failed to promote memory ${args.id}.`;
+          }
+          return `Promoted memory ${args.id} to global scope.`;
+        },
+      }),
+      memory_scope_demote: tool({
+        description: "Demote a memory from global scope to project scope",
+        args: {
+          id: tool.schema.string().min(6),
+          confirm: tool.schema.boolean().default(false),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          if (!args.confirm) {
+            return "Rejected: memory_scope_demote requires confirm=true.";
+          }
+          const projectScope = args.scope ?? deriveProjectScope(context.worktree);
+          const globalExists = await state.store.hasMemory(args.id, ["global"]);
+          if (!globalExists) {
+            return `Memory ${args.id} not found in global scope or is not a global memory.`;
+          }
+          const updated = await state.store.updateMemoryScope(args.id, projectScope, ["global"]);
+          if (!updated) {
+            return `Failed to demote memory ${args.id}.`;
+          }
+          return `Demoted memory ${args.id} from global to ${projectScope}.`;
+        },
+      }),
+      memory_global_list: tool({
+        description: "List all global-scoped memories, optionally filtered by search query or unused status",
+        args: {
+          query: tool.schema.string().optional(),
+          filter: tool.schema.string().optional(),
+          limit: tool.schema.number().int().min(1).max(100).default(20),
+        },
+        execute: async (args) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          let records: import("./types.js").MemoryRecord[];
+          if (args.filter === "unused") {
+            records = await state.store.getUnusedGlobalMemories(state.config.unusedDaysThreshold, args.limit);
+          } else if (args.query) {
+            let queryVector: number[] = [];
+            try {
+              queryVector = await state.embedder.embed(args.query);
+            } catch {
+              queryVector = [];
+            }
+            records = await state.store.search({
+              query: args.query,
+              queryVector,
+              scopes: ["global"],
+              limit: args.limit,
+              vectorWeight: 0.7,
+              bm25Weight: 0.3,
+              minScore: 0.2,
+              globalDiscountFactor: 1.0,
+            }).then((results) => results.map((r) => r.record));
+          } else {
+            records = await state.store.readGlobalMemories(args.limit);
+          }
+
+          if (records.length === 0) {
+            return "No global memories found.";
+          }
+
+          return records
+            .map((record, idx) => {
+              const date = new Date(record.timestamp).toISOString().split("T")[0];
+              const lastRecalled = record.lastRecalled > 0
+                ? new Date(record.lastRecalled).toISOString().split("T")[0]
+                : "never";
+              return `${idx + 1}. [${record.id}] ${record.text.slice(0, 80)}...
+  Stored: ${date} | Recalled: ${lastRecalled} | Count: ${record.recallCount} | Projects: ${record.projectCount}`;
+            })
+            .join("\n");
+        },
+      }),
       memory_port_plan: tool({
         description: "Plan non-conflicting host ports for compose services and optionally persist reservations",
         args: {
@@ -385,6 +496,9 @@ const plugin: Plugin = async (input) => {
                   scope: "global",
                   importance: 0.8,
                   timestamp: Date.now(),
+                  lastRecalled: 0,
+                  recallCount: 0,
+                  projectCount: 0,
                   schemaVersion: SCHEMA_VERSION,
                   embeddingModel: state.config.embedding.model,
                   vectorDim: vector.length,
@@ -559,6 +673,9 @@ async function flushAutoCapture(
     scope: activeScope,
     importance: result.candidate.importance,
     timestamp: Date.now(),
+    lastRecalled: 0,
+    recallCount: 0,
+    projectCount: 0,
     schemaVersion: SCHEMA_VERSION,
     embeddingModel: state.config.embedding.model,
     vectorDim: vector.length,

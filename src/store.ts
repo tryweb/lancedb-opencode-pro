@@ -67,6 +67,9 @@ export class MemoryStore {
         scope: "global",
         importance: 0,
         timestamp: 0,
+        lastRecalled: 0,
+        recallCount: 0,
+        projectCount: 0,
         schemaVersion: 1,
         embeddingModel: "bootstrap",
         vectorDim,
@@ -149,6 +152,7 @@ export class MemoryStore {
     recencyBoost?: boolean;
     recencyHalfLifeHours?: number;
     importanceWeight?: number;
+    globalDiscountFactor?: number;
   }): Promise<SearchResult[]> {
     const cached = await this.getCachedScopes(params.scopes);
     if (cached.records.length === 0) return [];
@@ -165,6 +169,7 @@ export class MemoryStore {
     const recencyBoostEnabled = params.recencyBoost ?? true;
     const recencyHalfLifeHours = Math.max(1, params.recencyHalfLifeHours ?? 72);
     const importanceWeight = clampImportanceWeight(params.importanceWeight ?? 0.4);
+    const globalDiscountFactor = params.globalDiscountFactor ?? 1.0;
 
     const candidates = cached.records
       .filter((record) => params.queryVector.length === 0 || record.vector.length === params.queryVector.length)
@@ -172,7 +177,8 @@ export class MemoryStore {
         const recordNorm = cached.norms.get(record.id) ?? vecNorm(record.vector);
         const vectorScore = useVectorChannel ? fastCosine(params.queryVector, record.vector, queryNorm, recordNorm) : 0;
         const bm25Score = useBm25Channel ? bm25LikeScore(queryTokens, cached.tokenized[index], cached.idf) : 0;
-        return { record, vectorScore, bm25Score };
+        const isGlobal = record.scope === "global";
+        return { record, vectorScore, bm25Score, isGlobal };
       });
 
     if (candidates.length === 0) return [];
@@ -197,7 +203,8 @@ export class MemoryStore {
           ? computeRecencyMultiplier(item.record.timestamp, recencyHalfLifeHours)
           : 1;
         const importanceFactor = 1 + importanceWeight * clampImportance(item.record.importance);
-        const score = rrfScore * recencyFactor * importanceFactor;
+        const scopeFactor = item.isGlobal ? globalDiscountFactor : 1.0;
+        const score = rrfScore * recencyFactor * importanceFactor * scopeFactor;
         return {
           record: item.record,
           score,
@@ -219,6 +226,30 @@ export class MemoryStore {
     await this.requireTable().delete(`id = '${escapeSql(match.id)}'`);
     this.invalidateScope(match.scope);
     return true;
+  }
+
+  async updateMemoryScope(id: string, newScope: string, scopes: string[]): Promise<boolean> {
+    const rows = await this.readByScopes(scopes);
+    const match = rows.find((row) => row.id === id);
+    if (!match) return false;
+
+    await this.requireTable().delete(`id = '${escapeSql(id)}'`);
+    this.invalidateScope(match.scope);
+
+    await this.requireTable().add([{ ...match, scope: newScope }]);
+    this.invalidateScope(newScope);
+    return true;
+  }
+
+  async readGlobalMemories(limit: number = 100): Promise<MemoryRecord[]> {
+    const rows = await this.readByScopes(["global"]);
+    return rows.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  }
+
+  async getUnusedGlobalMemories(unusedDaysThreshold: number, limit: number = 100): Promise<MemoryRecord[]> {
+    const cutoffTime = Date.now() - unusedDaysThreshold * 24 * 60 * 60 * 1000;
+    const rows = await this.readByScopes(["global"]);
+    return rows.filter((row) => row.lastRecalled > 0 && row.lastRecalled < cutoffTime).slice(0, limit);
   }
 
   async clearScope(scope: string): Promise<number> {
@@ -253,6 +284,46 @@ export class MemoryStore {
   async hasMemory(id: string, scopes: string[]): Promise<boolean> {
     const rows = await this.readByScopes(scopes);
     return rows.some((row) => row.id === id);
+  }
+
+  async updateMemoryUsage(id: string, projectScope: string, scopes: string[]): Promise<void> {
+    const rows = await this.readByScopes(scopes);
+    const match = rows.find((row) => row.id === id);
+    if (!match) return;
+
+    const now = Date.now();
+    const newRecallCount = match.recallCount + 1;
+
+    let newProjectCount = match.projectCount;
+    let metadataJson = match.metadataJson;
+
+    if (match.scope === "global" && projectScope) {
+      const projects = extractRecalledProjects(metadataJson);
+      if (!projects.has(projectScope)) {
+        projects.add(projectScope);
+        if (projects.size > 100) {
+          const arr = Array.from(projects);
+          arr.splice(0, arr.length - 100);
+          metadataJson = JSON.stringify({ recalledProjects: arr });
+        } else {
+          metadataJson = JSON.stringify({ recalledProjects: Array.from(projects) });
+        }
+        newProjectCount = projects.size;
+      }
+    }
+
+    await this.requireTable().delete(`id = '${escapeSql(id)}'`);
+    this.invalidateScope(match.scope);
+
+    await this.requireTable().add([{
+      ...match,
+      lastRecalled: now,
+      recallCount: newRecallCount,
+      projectCount: newProjectCount,
+      metadataJson,
+    }]);
+
+    this.invalidateScope(match.scope);
   }
 
   async listEvents(scopes: string[], limit: number): Promise<MemoryEffectivenessEvent[]> {
@@ -547,6 +618,9 @@ function normalizeRow(row: Record<string, unknown>): MemoryRecord | null {
     scope: row.scope,
     importance: Number(row.importance ?? 0.5),
     timestamp: Number(row.timestamp ?? Date.now()),
+    lastRecalled: Number(row.lastRecalled ?? 0),
+    recallCount: Number(row.recallCount ?? 0),
+    projectCount: Number(row.projectCount ?? 0),
     schemaVersion: Number(row.schemaVersion ?? 1),
     embeddingModel: String(row.embeddingModel ?? "unknown"),
     vectorDim: Number(row.vectorDim ?? vector.length),
@@ -711,4 +785,16 @@ function bm25LikeScore(query: string[], doc: string[], idf: Map<string, number>)
   }
 
   return 1 - Math.exp(-score);
+}
+
+function extractRecalledProjects(metadataJson: string): Set<string> {
+  try {
+    const metadata = JSON.parse(metadataJson);
+    if (metadata && Array.isArray(metadata.recalledProjects)) {
+      return new Set(metadata.recalledProjects);
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return new Set();
 }

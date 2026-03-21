@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.0] - 2026-03-21
+
+### Added
+
+- Cross-project memory scope with global scope support for sharing knowledge across projects.
+- Global detection heuristic with `GLOBAL_KEYWORDS` array covering distributions, containers, orchestration, shells, databases, cloud, VCS, protocols, and package managers.
+- `memory_scope_promote` tool: promote memories from project scope to global scope.
+- `memory_scope_demote` tool: demote memories from global scope back to project scope.
+- `memory_global_list` tool: list/search all global-scoped memories with optional unused filter.
+- Usage statistics tracking: `lastRecalled`, `recallCount`, and `projectCount` fields on every memory record.
+- Smart unused detection: identifies global memories not recalled within `unusedDaysThreshold` using actual recall events.
+- New config options: `globalDetectionThreshold` (default: 2), `globalDiscountFactor` (default: 0.7), `unusedDaysThreshold` (default: 30).
+
+### Changed
+
+- Dual-scope recall: `memory_search` now queries both project and global scopes with global scores discounted by 0.7x.
+- Auto-recall (system.transform) now includes global memories in context injection.
+- `memory_global_list` output now includes usage statistics (stored date, last recalled, recall count, project count).
+
+---
+
 ## [0.1.6] - 2026-03-20
 
 ### Fixed

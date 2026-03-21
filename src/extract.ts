@@ -16,6 +16,69 @@ const DECISION_SIGNALS = ["decide", "decision", "tradeoff", "architecture", "採
 const FACT_SIGNALS = ["because", "root cause", "原因", "由於"];
 const PREF_SIGNALS = ["prefer", "preference", "偏好", "習慣"];
 
+const GLOBAL_KEYWORDS = [
+  // Distributions
+  "alpine",
+  "debian",
+  "ubuntu",
+  "centos",
+  "fedora",
+  "arch",
+  // Containers
+  "docker",
+  "dockerfile",
+  "docker-compose",
+  "containerd",
+  // Orchestration
+  "kubernetes",
+  "k8s",
+  "helm",
+  "kubectl",
+  // Shells/Systems
+  "bash",
+  "shell",
+  "linux",
+  "unix",
+  "posix",
+  "busybox",
+  // Web servers
+  "nginx",
+  "apache",
+  "caddy",
+  // Databases
+  "postgres",
+  "postgresql",
+  "mysql",
+  "redis",
+  "mongodb",
+  "sqlite",
+  // Cloud
+  "aws",
+  "gcp",
+  "azure",
+  "digitalocean",
+  // VCS
+  "git",
+  "github",
+  "gitlab",
+  "bitbucket",
+  // Protocols
+  "api",
+  "rest",
+  "graphql",
+  "grpc",
+  "http",
+  "https",
+  // Package managers
+  "npm",
+  "yarn",
+  "pnpm",
+  "pip",
+  "cargo",
+  "make",
+  "cmake",
+];
+
 export function extractCaptureCandidate(text: string, minChars: number): CaptureCandidateResult {
   const normalized = text.trim();
   if (normalized.length < minChars) {
@@ -49,4 +112,19 @@ function classifyCategory(text: string): MemoryCategory {
 function clipText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return `${text.slice(0, maxLen - 3)}...`;
+}
+
+export function detectGlobalWorthiness(content: string): number {
+  const lower = content.toLowerCase();
+  let matches = 0;
+  for (const keyword of GLOBAL_KEYWORDS) {
+    if (lower.includes(keyword)) {
+      matches += 1;
+    }
+  }
+  return matches;
+}
+
+export function isGlobalCandidate(content: string, threshold: number): boolean {
+  return detectGlobalWorthiness(content) >= threshold;
 }
