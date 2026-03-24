@@ -3,5 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NODE_VERSION: ${NODE_VERSION:-22}
     container_name: lancedb-opencode-pro-app
     working_dir: /workspace
