@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ## [0.2.2] - 2026-03-21
 
+### Changed
+
+- Upgraded `@lancedb/lancedb` from `0.26.2` to `0.27.1` for improved hybrid search pre-filtering and native binding compatibility (napi-rs v3).
+
 ### Fixed
 
 - `memory_scope_promote`, `memory_delete`, `memory_feedback_wrong`, `memory_feedback_useful` now accept 8-character short IDs (prefix of UUID) in addition to full 36-character UUIDs. Previously, passing a short ID always returned "not found" even though `memory_search` could find the same memory.
@@ -128,7 +132,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
-## [0.1.0] - 2026-03-16
+## Dependency History
+
+### LanceDB
+
+| Version | Date | Notes |
+|---------|------|-------|
+| 0.27.1 | 2026-03-24 | Hybrid search pre-filtering fix, napi-rs v3, parallel inserts |
+| 0.26.2 | 2026-03-16 | Initial version |
+
+See [docs/lancedb-upgrades.md](docs/lancedb-upgrades.md) for detailed upgrade history and verification checklists.
 
 ### Added
 - LanceDB-backed long-term memory provider for OpenCode.

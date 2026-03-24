@@ -1,4 +1,5 @@
-FROM node:22-bookworm
+ARG NODE_VERSION=22
+FROM node:${NODE_VERSION}-bookworm
 
 WORKDIR /workspace
 

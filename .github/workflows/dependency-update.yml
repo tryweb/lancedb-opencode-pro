@@ -1,0 +1,165 @@
+name: Dependency Update Check
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to check (default: @lancedb/lancedb)'
+        required: false
+        default: '@lancedb/lancedb'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-dependency-updates:
+    runs-on: ubuntu-latest
+    outputs:
+      lancedb-update: ${{ steps.lancedb.outputs.update-needed }}
+      lancedb-latest: ${{ steps.lancedb.outputs.latest }}
+      lancedb-current: ${{ steps.lancedb.outputs.current }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Check LanceDB updates
+        id: lancedb
+        run: |
+          CURRENT=$(node -e "console.log(require('./package.json').dependencies['@lancedb/lancedb'])")
+          LATEST=$(npm view @lancedb/lancedb version)
+          CURRENT_CLEAN=$(echo "$CURRENT" | sed 's/[\^~]//')
+          
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "current-clean=$CURRENT_CLEAN" >> $GITHUB_OUTPUT
+          
+          if [ "$CURRENT_CLEAN" != "$LATEST" ]; then
+            echo "update-needed=true" >> $GITHUB_OUTPUT
+            echo "::warning::LanceDB update available: $CURRENT -> $LATEST"
+          else
+            echo "update-needed=false" >> $GITHUB_OUTPUT
+            echo "::notice::LanceDB version is up to date: $CURRENT"
+          fi
+      
+      - name: Audit dependencies for vulnerabilities
+        run: npm audit --audit-level=moderate || true
+      
+      - name: Check for outdated packages
+        run: npm outdated || true
+
+  test-with-latest-lancedb:
+    needs: check-dependency-updates
+    if: needs.check-dependency-updates.outputs.lancedb-update == 'true'
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: docker-compose.ci.yml
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Get latest LanceDB version
+        run: |
+          echo "LATEST=${{ needs.check-dependency-updates.outputs.lancedb-latest }}" >> $GITHUB_ENV
+      
+      - name: Update package.json
+        run: |
+          LATEST="${{ needs.check-dependency-updates.outputs.lancedb-latest }}"
+          sed -i "s/\"@lancedb\/lancedb\": \"[^\"]*\"/\"@lancedb\/lancedb\": \"^$LATEST\"/" package.json
+          cat package.json | grep lancedb
+      
+      - name: Build and test with latest LanceDB
+        run: |
+          docker compose build --no-cache
+          docker compose up -d
+          docker compose exec -T app npm install
+          docker compose exec -T app npm run verify
+      
+      - name: Report compatibility status
+        if: always()
+        run: |
+          echo "::notice::Completed compatibility test with LanceDB ${{ needs.check-dependency-updates.outputs.lancedb-latest }}"
+      
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  create-update-issue:
+    needs: [check-dependency-updates, test-with-latest-lancedb]
+    if: |
+      needs.check-dependency-updates.outputs.lancedb-update == 'true' &&
+      needs.test-with-latest-lancedb.result == 'success'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create GitHub Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const current = '${{ needs.check-dependency-updates.outputs.lancedb-current }}';
+            const latest = '${{ needs.check-dependency-updates.outputs.lancedb-latest }}';
+            
+            // Check for existing issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dependencies'
+            });
+            
+            const existingIssue = issues.data.find(issue => 
+              issue.title.includes('LanceDB') && 
+              issue.title.includes('update available')
+            );
+            
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `📦 LanceDB update available: ${current} → ${latest}`,
+                body: `
+            ## Dependency Update Available
+            
+            - **Package**: @lancedb/lancedb
+            - **Current**: ${current}
+            - **Latest**: ${latest}
+            - **Compatibility Test**: ✅ Passed
+            
+            ## Changes Required
+            
+            1. Update \`package.json\`:
+               \`\`\`json
+               "@lancedb/lancedb": "^${latest}"
+               \`\`\`
+            
+            2. Run \`npm install\` to update lock file
+            
+            3. Run verification: \`npm run verify:full\`
+            
+            4. Run Docker verification:
+               \`\`\`bash
+               docker compose build --no-cache && docker compose up -d
+               docker compose exec app npm run verify:full
+               \`\`\`
+            
+            ## Actions
+            
+            - [ ] Update package.json
+            - [ ] Update package-lock.json
+            - [ ] Run full test suite
+            - [ ] Update CHANGELOG.md
+            - [ ] Create PR with test evidence
+                `,
+                labels: ['dependencies', 'lancedb', 'automated']
+              });
+            }
