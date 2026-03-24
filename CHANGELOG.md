@@ -6,11 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
-## [0.2.2] - 2026-03-21
+## [0.2.3] - 2026-03-24
 
 ### Changed
 
 - Upgraded `@lancedb/lancedb` from `0.26.2` to `0.27.1` for improved hybrid search pre-filtering and native binding compatibility (napi-rs v3).
+
+### Added
+
+- `dependency-update.yml` workflow: weekly scheduled check for LanceDB version updates with compatibility testing.
+- `verify-matrix` job in CI: Node.js 20 and Node.js 22 compatibility testing.
+- `docs/lancedb-upgrades.md`: LanceDB upgrade history and verification checklist.
+- LanceDB version tracking section in CHANGELOG.md.
+
+### CI/CD
+
+- Dockerfile now supports `NODE_VERSION` build argument for matrix testing.
+- `docker-compose.ci.yml` passes `NODE_VERSION` to Docker build.
+
+---
+
+## [0.2.2] - 2026-03-21
 
 ### Fixed
 
