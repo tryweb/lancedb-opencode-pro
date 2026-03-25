@@ -44,6 +44,18 @@ Full 20KB analysis with:
 
 **Read time**: 20-30 minutes
 
+### 4. **embedding-migration.md** (OPERATIONS)
+Embedding model switching guide with:
+- Vector dimension compatibility table
+- System protection mechanisms
+- 3 migration scenarios (coexistence, clean rebuild, dual-write)
+- Configuration steps (Ollama → OpenAI)
+- Cost considerations
+- Troubleshooting & rollback procedures
+- FAQ
+
+**Read time**: 10-15 minutes
+
 ## Quick Navigation
 
 **I need to...**
@@ -52,6 +64,8 @@ Full 20KB analysis with:
 - **See all options at a glance** → Read QUICK_REFERENCE.md
 - **Understand the full context** → Read EXTENSIBILITY_ANALYSIS.md
 - **Find specific evidence** → Search EXTENSIBILITY_ANALYSIS.md
+- **Switch embedding models** → Read embedding-migration.md
+- **Understand vector dimensions** → Read embedding-migration.md
 
 ## Key Findings
 

@@ -179,6 +179,15 @@
 ### "What's the minimal viable test suite?"
 → `validation-priority-summary.md` - Minimal Viable Test Suite section
 
+### "How do I switch embedding models?"
+→ `embedding-migration.md` - Configuration Changes section
+
+### "What happens to old memories when I switch?"
+→ `embedding-migration.md` - System Protection Mechanism section
+
+### "How much does OpenAI embedding cost?"
+→ `embedding-migration.md` - Cost Considerations section
+
 ---
 
 ## 📊 Document Statistics
@@ -268,6 +277,7 @@
 - `acceptance-checklist.md` - Acceptance criteria
 - `operations.md` - Operations guide
 - `rollback-criteria.md` - Rollback criteria
+- `embedding-migration.md` - Embedding model switching guide (Ollama ↔ OpenAI)
 
 ---
 
