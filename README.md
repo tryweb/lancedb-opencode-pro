@@ -383,14 +383,14 @@ Add an `injection` block to your sidecar config:
     "mode": "fixed",
     "maxMemories": 3,
     "minMemories": 1,
-    "budgetTokens": 2000,
+    "budgetTokens": 4096,
     "maxCharsPerMemory": 1200,
     "summarization": "none",
-    "summaryTargetChars": 400,
+    "summaryTargetChars": 300,
     "scoreDropTolerance": 0.15,
-    "injectionFloor": 0.3,
+    "injectionFloor": 0.2,
     "codeSummarization": {
-      "mode": "truncate",
+      "mode": "smart",
       "preserveStructure": true
     }
   }
@@ -416,7 +416,7 @@ When `summarization` is set to `truncate` or `extract`, memories are summarized 
 
 The `codeSummarization` config controls how code snippets are processed:
 
-- **`mode`**: `"truncate"` | `"preserve"` | `"auto"` (default: `"truncate"`)
+- **`mode`**: `"smart"` | `"truncate"` | `"preserve"` (default: `"smart"`)
 - **`preserveStructure`**: When `true`, code truncation attempts to balance brackets and preserve syntactic validity.
 
 ### Environment Variables
@@ -474,9 +474,9 @@ For quality-sensitive scenarios where you want to avoid low-relevance memories:
   "injection": {
     "mode": "adaptive",
     "maxMemories": 5,
-    "minMemories": 1,
+    "minMemories": 2,
     "scoreDropTolerance": 0.15,
-    "injectionFloor": 0.3
+    "injectionFloor": 0.2
   }
 }
 ```
@@ -485,7 +485,38 @@ This configuration:
 1. Starts with up to 5 candidate memories
 2. Stops adding memories when score drops >15% from the top
 3. Ensures minimum score threshold (floor) prevents low-quality injection
-4. Always includes at least 1 memory
+4. Always includes at least 2 memories
+
+### Example: Adaptive Mode with Auto Summarization
+
+Recommended for users who want intelligent memory injection with content-aware summarization:
+
+```json
+{
+  "injection": {
+    "mode": "adaptive",
+    "maxMemories": 5,
+    "minMemories": 2,
+    "budgetTokens": 4096,
+    "maxCharsPerMemory": 1200,
+    "summarization": "auto",
+    "summaryTargetChars": 400,
+    "scoreDropTolerance": 0.15,
+    "injectionFloor": 0.2,
+    "codeSummarization": {
+      "mode": "smart",
+      "preserveStructure": true
+    }
+  }
+}
+```
+
+This configuration:
+1. Dynamically adjusts injection count based on relevance scores
+2. Uses content-aware summarization (key sentences for text, smart truncation for code)
+3. Guarantees at least 2 memories are injected
+4. Preserves code structure when truncating
+5. Prevents injection of memories below 0.2 score threshold
 
 ---
 

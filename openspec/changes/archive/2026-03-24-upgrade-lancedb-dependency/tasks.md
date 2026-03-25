@@ -43,9 +43,11 @@
 - [x] 6.2 Review all CI checks: verify, dependency-audit, verify-matrix
 - [x] 6.3 Address any CI failures and re-run verification
 - [x] 6.4 Confirm all test suites pass (foundation, regression, retrieval, effectiveness)
-- [ ] 6.5 Merge to main branch after all checks pass
-- [ ] 6.6 Verify release tag build with `npm run release:check`
+- [x] 6.5 Merge to main branch after all checks pass
+- [x] 6.6 Verify release tag build with `npm run release:check`
 
 ## 7. OpenSpec Archive
 
 - [x] 7.1 Run `/openspec-verify` to confirm implementation matches specs
+- [x] 7.2 Run `/openspec-archive` to archive the completed change
+- [x] 7.3 Verify specs are merged into `openspec/specs/` directory
