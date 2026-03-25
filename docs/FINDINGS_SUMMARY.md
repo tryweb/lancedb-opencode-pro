@@ -61,58 +61,78 @@ KEY FINDINGS
 PRACTICAL OPTIONS FOR MEMORY UX
 ================================================================================
 
-OPTION A: Keep Current (Tools Only)
-├─ Status: ✅ Working now
-├─ User Access: ❌ No (AI-only)
-├─ Latency: High (AI processing)
-├─ Token Cost: Yes
-├─ Distribution: ✅ npm package
-└─ Best For: AI-context-only use cases
-
-OPTION B: Plugin Commands (When Stable)
-├─ Status: ⚠️ Experimental (PR #7563 not merged)
-├─ User Access: ✅ Yes (/memory_search)
-├─ Latency: Low (direct execution)
-├─ Token Cost: No
-├─ Distribution: ✅ Same npm package
-├─ Timeline: Unknown
-└─ Best For: User-facing operations (optimal UX)
-
-OPTION C: Hybrid (Tools + Custom Commands)
-├─ Status: ✅ Works today
-├─ User Access: ✅ Yes (/memory-search)
-├─ Latency: Medium (AI processing)
-├─ Token Cost: Yes
-├─ Distribution: Via docs/examples (users add locally)
-└─ Best For: User-facing + AI reasoning (interim solution)
-
-OPTION D: Custom Tools (Local Alternative)
-├─ Status: ✅ Works today
-├─ User Access: ❌ No (AI-only)
-├─ Distribution: ❌ Not distributed
-└─ Best For: Not recommended (duplicates logic)
+```mermaid
+graph LR
+    subgraph OPTION_A[OPTION A: Keep Current Tools Only]
+        A1[Status: ✅ Working now]
+        A2[User Access: ❌ No AI-only]
+        A3[Latency: High AI processing]
+        A4[Token Cost: Yes]
+        A5[Distribution: ✅ npm package]
+        A6[Best For: AI-context-only use cases]
+    end
+    
+    subgraph OPTION_B[OPTION B: Plugin Commands When Stable]
+        B1[Status: ⚠️ Experimental PR #7563 not merged]
+        B2[User Access: ✅ Yes /memory_search]
+        B3[Latency: Low direct execution]
+        B4[Token Cost: No]
+        B5[Distribution: ✅ Same npm package]
+        B6[Timeline: Unknown]
+        B7[Best For: User-facing operations optimal UX]
+    end
+    
+    subgraph OPTION_C[OPTION C: Hybrid Tools + Custom Commands]
+        C1[Status: ✅ Works today]
+        C2[User Access: ✅ Yes /memory-search]
+        C3[Latency: Medium AI processing]
+        C4[Token Cost: Yes]
+        C5[Distribution: Via docs/examples users add locally]
+        C6[Best For: User-facing + AI reasoning interim solution]
+    end
+    
+    subgraph OPTION_D[OPTION D: Custom Tools Local Alternative]
+        D1[Status: ✅ Works today]
+        D2[User Access: ❌ No AI-only]
+        D3[Distribution: ❌ Not distributed]
+        D4[Best For: Not recommended duplicates logic]
+    end
+    
+    style OPTION_A fill:#4dabf7,stroke:#1971c2,color:#fff
+    style OPTION_B fill:#ffd43b,stroke:#f59f00,color:#000
+    style OPTION_C fill:#51cf66,stroke:#2f9e44,color:#fff
+    style OPTION_D fill:#ff6b6b,stroke:#c92a2a,color:#fff
+```
 
 ================================================================================
 DECISION FRAMEWORK
 ================================================================================
 
-Question 1: Who are primary users?
-├─ AI agents only? → Option A
-├─ Humans + AI? → Option C or B
-└─ Humans primarily? → Option B (when stable)
-
-Question 2: Latency tolerance?
-├─ <1s required? → Option B (plugin commands)
-├─ <5s acceptable? → Option C (custom commands)
-└─ No constraint? → Option A (tools)
-
-Question 3: Can wait for feature stabilization?
-├─ No (need now) → Option C
-└─ Yes (can wait) → Option B
-
-Question 4: Is this user-facing product?
-├─ Yes → Option B or C
-└─ No (internal tool) → Option A
+```mermaid
+graph TD
+    Q1[Question 1: Who are primary users?]
+    Q1 -->|AI agents only?| A[Option A]
+    Q1 -->|Humans + AI?| CB[Option C or B]
+    Q1 -->|Humans primarily?| B[Option B when stable]
+    
+    Q2[Question 2: Latency tolerance?]
+    Q2 -->|<1s required?| B2[Option B plugin commands]
+    Q2 -->|<5s acceptable?| C2[Option C custom commands]
+    Q2 -->|No constraint?| A2[Option A tools]
+    
+    Q3[Question 3: Can wait for feature stabilization?]
+    Q3 -->|No need now| C3[Option C]
+    Q3 -->|Yes can wait| B3[Option B]
+    
+    Q4[Question 4: Is this user-facing product?]
+    Q4 -->|Yes| BC4[Option B or C]
+    Q4 -->|No internal tool| A4[Option A]
+    
+    style Q1 fill:#e6f3ff,stroke:#0066cc
+    style Q2 fill:#e6f3ff,stroke:#0066cc
+    style Q3 fill:#e6f3ff,stroke:#0066cc
+    style Q4 fill:#e6f3ff,stroke:#0066cc
+```
 
 ================================================================================
 RECOMMENDATION

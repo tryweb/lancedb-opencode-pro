@@ -198,6 +198,37 @@
   - Measurement: Verify oldest 50 are deleted
   - Acceptance: Remaining records have highest timestamps
 
+### 3.5 Injection Control
+- [ ] **Fixed Mode (Default)**
+  - Test: Set `injection.mode=fixed`, recall 10 memories
+  - Measurement: Number of injected memories
+  - Acceptance: ≤ `maxMemories` (default 3) injected
+  - Reference: `injection.ts` (fixed mode logic)
+
+- [ ] **Budget Mode**
+  - Test: Set `injection.mode=budget`, `budgetTokens=1000`
+  - Measurement: Total estimated tokens of injected memories
+  - Acceptance: ≤ `budgetTokens` injected
+  - Reference: `injection.ts` (budget mode logic)
+
+- [ ] **Adaptive Mode**
+  - Test: Set `injection.mode=adaptive`, `scoreDropTolerance=0.15`
+  - Measurement: Score drop between consecutive memories
+  - Acceptance: Injection stops when score drops > 15%
+  - Reference: `injection.ts` (adaptive mode logic)
+
+- [ ] **Summarization Modes**
+  - Test: Set `injection.summarization=auto`, recall long memories
+  - Measurement: Output character count vs `summaryTargetChars`
+  - Acceptance: Summarized text ≤ `summaryTargetChars`
+  - Reference: `summarizer.ts` (summarization logic)
+
+- [ ] **Code Summarization**
+  - Test: Set `injection.codeSummarization.mode=preserve`, recall code memories
+  - Measurement: Bracket balance in truncated code
+  - Acceptance: Valid syntax after truncation
+  - Reference: `summarizer.ts` (code truncation logic)
+
 ---
 
 ## PHASE 4: PERFORMANCE & SCALABILITY
@@ -532,13 +563,14 @@ async function profileLatency(fn: () => Promise<any>, iterations: number) {
 
 ---
 
-## SUCCESS CRITERIA FOR v0.1.0
+## SUCCESS CRITERIA FOR v0.2.4
 
 ✅ **MUST HAVE** (Blocking Release)
 - [ ] Phase 0: All schema & persistence tests pass
 - [ ] Phase 1.1: Recall@10 ≥ 0.85, Robustness-0.5@10 ≥ 0.90
 - [ ] Phase 2.1: Scope isolation 100% correct
 - [ ] Phase 3: All regression tests pass
+- [ ] Phase 3.5: Injection control modes work correctly
 - [ ] Phase 6.1: No crashes on malformed input
 
 ✅ **SHOULD HAVE** (High Priority)
@@ -546,6 +578,7 @@ async function profileLatency(fn: () => Promise<any>, iterations: number) {
 - [ ] Phase 4.1: p50 latency < 100ms on 10K records
 - [ ] Phase 5.1: Ollama integration tested
 - [ ] Phase 7: Stats & error messages complete
+- [ ] Phase 3.5: Summarization modes produce valid output
 
 ⚠️ **NICE TO HAVE** (Future)
 - [ ] Phase 4.3: Scalability to 100K records

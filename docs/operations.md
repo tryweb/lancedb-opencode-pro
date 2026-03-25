@@ -1,5 +1,58 @@
 # Operations
 
+## Daily Operations
+
+### Available Tools
+
+| Tool | Purpose | Confirmation Required |
+|------|---------|----------------------|
+| `memory_search` | Search memories by query | No |
+| `memory_delete` | Delete a specific memory by ID | Yes (`confirm=true`) |
+| `memory_clear` | Clear all memories in a scope | Yes (`confirm=true`) |
+| `memory_stats` | View statistics and index health | No |
+| `memory_effectiveness` | View effectiveness metrics | No |
+| `memory_feedback_missing` | Report missing memory | No |
+| `memory_feedback_wrong` | Report incorrect memory | No |
+| `memory_feedback_useful` | Report useful memory | No |
+| `memory_scope_promote` | Promote memory to global scope | No |
+| `memory_scope_demote` | Demote memory from global scope | No |
+| `memory_global_list` | List global memories | No |
+
+### Common Workflows
+
+#### Check System Health
+
+```bash
+# View statistics
+memory_stats
+
+# Check effectiveness
+memory_effectiveness
+```
+
+#### Search and Verify
+
+```bash
+# Search for specific topic
+memory_search query="nginx configuration" limit=5
+
+# Search with broader terms
+memory_search query="deployment" limit=10
+```
+
+#### Clean Up Old Memories
+
+```bash
+# List memories in scope
+memory_global_list limit=50
+
+# Delete specific memory (requires confirmation)
+memory_delete id="<memory-id>" confirm=true
+
+# Clear entire scope (requires confirmation)
+memory_clear scope="project:old-project" confirm=true
+```
+
 ## Embedding Model Migration Behavior
 
 - Records persist `schemaVersion`, `embeddingModel`, and `vectorDim`.
@@ -75,6 +128,94 @@ When explicit feedback is sparse, run a bounded audit instead of assuming qualit
 3. Mark whether the memory was relevant, neutral noise, or misleading.
 4. Sample 10-20 skipped captures, especially `no-positive-signal`, and check whether important durable knowledge was missed.
 5. Treat the audit as release input alongside `memory_effectiveness`, not as a replacement for runtime metrics.
+
+## Monitoring And Diagnostics
+
+### Key Metrics to Monitor
+
+| Metric | Healthy Range | Warning Sign |
+|--------|---------------|--------------|
+| `capture.successRate` | > 0.8 | < 0.5 |
+| `recall.hitRate` | > 0.7 | < 0.3 |
+| `recall.injectionRate` | > 0.6 | < 0.2 |
+| `recall.manualRescueRatio` | < 0.3 | > 0.5 |
+
+### Diagnostic Commands
+
+```bash
+# Check index health
+memory_stats
+# Look for: indexHealth.vector = true, indexHealth.fts = true
+
+# Verify search works
+memory_search query="test" limit=1
+# Should return results if memories exist
+
+# Check effectiveness
+memory_effectiveness
+# Review capture and recall metrics
+```
+
+### Troubleshooting Common Issues
+
+#### No Search Results
+
+**Symptoms**: `memory_search` returns empty array
+
+**Possible Causes**:
+1. No memories stored yet
+2. Vector dimension mismatch (after embedding model change)
+3. Scope filtering issue
+
+**Diagnosis**:
+```bash
+# Check if memories exist
+memory_stats
+
+# Try broader search
+memory_search query="" limit=10
+```
+
+#### Slow Search Performance
+
+**Symptoms**: Search takes > 500ms
+
+**Possible Causes**:
+1. Large number of memories (> 10K)
+2. Index not created
+3. Embedding backend slow
+
+**Diagnosis**:
+```bash
+# Check index status
+memory_stats
+# Look for: indexHealth.vector = true
+
+# Check memory count
+memory_stats
+# Look for: recentCount
+```
+
+#### Embedding Errors
+
+**Symptoms**: `Ollama embedding request failed` or `OpenAI embedding request failed`
+
+**Possible Causes**:
+1. Backend unavailable
+2. Wrong configuration
+3. Network issues
+
+**Diagnosis**:
+```bash
+# Check configuration
+cat ~/.config/opencode/lancedb-opencode-pro.json
+
+# Test Ollama connection (if using Ollama)
+curl http://127.0.0.1:11434/api/tags
+
+# Test OpenAI connection (if using OpenAI)
+curl -H "Authorization: Bearer $OPENAI_API_KEY" https://api.openai.com/v1/models
+```
 
 ---
 

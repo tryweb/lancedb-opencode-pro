@@ -59,29 +59,33 @@ tool: {
 
 **Source**: [OpenCode Docs - Plugins](https://opencode.ai/docs/plugins/) | [OpenCode Docs - Custom Tools](https://opencode.ai/docs/custom-tools/) | [OpenCode Docs - Commands](https://opencode.ai/docs/commands/)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    EXTENSIBILITY TIERS                      │
-├─────────────────────────────────────────────────────────────┤
-│ TIER 1: PLUGINS (Heavy)                                     │
-│ - Hook into events (session.idle, file.edited, etc.)        │
-│ - Register custom tools                                     │
-│ - Modify system behavior                                    │
-│ - Distribution: npm packages or local files                 │
-│ - Load: .opencode/plugins/ or config                        │
-├─────────────────────────────────────────────────────────────┤
-│ TIER 2: CUSTOM TOOLS (Medium)                               │
-│ - Functions LLM can call                                    │
-│ - Can invoke scripts in any language                        │
-│ - Distribution: Local (.opencode/tools/) or via plugin      │
-│ - Invocation: AI-only (no direct user access)               │
-├─────────────────────────────────────────────────────────────┤
-│ TIER 3: CUSTOM COMMANDS (Light)                             │
-│ - Slash commands (/command) in TUI                          │
-│ - Prompt templates with placeholders                        │
-│ - Distribution: Local (.opencode/commands/) or config       │
-│ - Invocation: Direct user input (no AI needed)              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph TIER1[TIER 1: PLUGINS Heavy]
+        T1_1[Hook into events]
+        T1_2[Register custom tools]
+        T1_3[Modify system behavior]
+        T1_4[Distribution: npm packages or local files]
+        T1_5[Load: .opencode/plugins/ or config]
+    end
+    
+    subgraph TIER2[TIER 2: CUSTOM TOOLS Medium]
+        T2_1[Functions LLM can call]
+        T2_2[Can invoke scripts in any language]
+        T2_3[Distribution: Local .opencode/tools/ or via plugin]
+        T2_4[Invocation: AI-only no direct user access]
+    end
+    
+    subgraph TIER3[TIER 3: CUSTOM COMMANDS Light]
+        T3_1[Slash commands /command in TUI]
+        T3_2[Prompt templates with placeholders]
+        T3_3[Distribution: Local .opencode/commands/ or config]
+        T3_4[Invocation: Direct user input no AI needed]
+    end
+    
+    style TIER1 fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    style TIER2 fill:#4dabf7,stroke:#1971c2,color:#fff
+    style TIER3 fill:#51cf66,stroke:#2f9e44,color:#fff
 ```
 
 ### 2.2 Plugin System (Tier 1)
