@@ -2,7 +2,7 @@
 
 **Last Updated**: March 2026  
 **Status**: Ready for Implementation  
-**Total Documentation**: 1,864 lines across 4 documents
+**Total Documentation**: 4,187 lines across 14 documents
 
 ---
 
@@ -188,17 +188,37 @@
 ### "How much does OpenAI embedding cost?"
 → `embedding-migration.md` - Cost Considerations section
 
+### "How do I configure injection control?"
+→ `README.md` - Injection Control section
+
+### "How do I monitor memory system health?"
+→ `operations.md` - Monitoring And Diagnostics section
+
+### "What tools are available for memory management?"
+→ `operations.md` - Daily Operations section
+
 ---
 
 ## 📊 Document Statistics
 
 | Document | Lines | Sections | Tests | Code Examples |
 |----------|-------|----------|-------|---------------|
-| VALIDATION_README.md | 346 | 12 | - | - |
-| validation-priority-summary.md | 289 | 10 | 5 | 2 |
-| memory-validation-checklist.md | 481 | 8 | 50+ | - |
+| VALIDATION_README.md | 372 | 12 | - | - |
+| validation-priority-summary.md | 290 | 10 | 5 | 2 |
+| memory-validation-checklist.md | 615 | 10 | 55+ | - |
 | test-implementation-guide.md | 748 | 6 | 20+ | 15+ |
-| **TOTAL** | **1,864** | **36** | **75+** | **17+** |
+| release-readiness.md | 154 | 6 | - | - |
+| operations.md | 241 | 8 | - | - |
+| embedding-migration.md | 405 | 8 | - | - |
+| architecture.md | 415 | 8 | - | - |
+| EXTENSIBILITY_ANALYSIS.md | 621 | 9 | - | - |
+| QUICK_REFERENCE.md | 73 | 5 | - | - |
+| FINDINGS_SUMMARY.txt | 225 | 8 | - | - |
+| INDEX.md | 323 | 12 | - | - |
+| README.md | 161 | 5 | - | - |
+| lancedb-upgrades.md | 73 | 3 | - | - |
+| github-migration.md | 79 | 3 | - | - |
+| **TOTAL** | **4,795** | **96** | **80+** | **17+** |
 
 ---
 
@@ -272,12 +292,13 @@
 ## 📚 Related Documents
 
 - `README.md` - Project overview
+- `architecture.md` - System architecture & data model
 - `EXTENSIBILITY_ANALYSIS.md` - Architecture analysis
 - `QUICK_REFERENCE.md` - Quick reference guide
-- `acceptance-checklist.md` - Acceptance criteria
-- `operations.md` - Operations guide
-- `rollback-criteria.md` - Rollback criteria
+- `release-readiness.md` - Release readiness & acceptance checklist
+- `operations.md` - Operations guide & rollback criteria
 - `embedding-migration.md` - Embedding model switching guide (Ollama ↔ OpenAI)
+- `lancedb-upgrades.md` - LanceDB upgrade notes
 
 ---
 

@@ -316,31 +316,40 @@ rm -rf /tmp/test-memory
 
 ## 📚 Document Navigation
 
-```
-VALIDATION_README.md (you are here)
-├── validation-priority-summary.md
-│   ├── Top 5 priorities
-│   ├── Effort/impact matrix
-│   ├── Week 1 plan
-│   └── Minimal viable test suite
-├── memory-validation-checklist.md
-│   ├── Phase 0: Foundation
-│   ├── Phase 1: Retrieval Quality
-│   ├── Phase 2: Scope Isolation
-│   ├── Phase 3: Regression Tests
-│   ├── Phase 4: Performance
-│   ├── Phase 5: Embedding Integration
-│   ├── Phase 6: Edge Cases
-│   ├── Phase 7: Observability
-│   └── Success Criteria
-└── test-implementation-guide.md
-    ├── Setup & Harness
-    ├── Phase 0 Tests (code)
-    ├── Phase 1 Tests (code)
-    ├── Phase 2 Tests (code)
-    ├── Phase 3 Tests (code)
-    ├── Phase 4 Tests (code)
-    └── Running Tests
+```mermaid
+graph TD
+    Root[VALIDATION_README.md<br/>you are here]
+    
+    Root --> VPS[validation-priority-summary.md]
+    VPS --> VPS_1[Top 5 priorities]
+    VPS --> VPS_2[Effort/impact matrix]
+    VPS --> VPS_3[Week 1 plan]
+    VPS --> VPS_4[Minimal viable test suite]
+    
+    Root --> MVC[memory-validation-checklist.md]
+    MVC --> MVC_0[Phase 0: Foundation]
+    MVC --> MVC_1[Phase 1: Retrieval Quality]
+    MVC --> MVC_2[Phase 2: Scope Isolation]
+    MVC --> MVC_3[Phase 3: Regression Tests]
+    MVC --> MVC_4[Phase 4: Performance]
+    MVC --> MVC_5[Phase 5: Embedding Integration]
+    MVC --> MVC_6[Phase 6: Edge Cases]
+    MVC --> MVC_7[Phase 7: Observability]
+    MVC --> MVC_8[Success Criteria]
+    
+    Root --> TIG[test-implementation-guide.md]
+    TIG --> TIG_1[Setup & Harness]
+    TIG --> TIG_2[Phase 0 Tests code]
+    TIG --> TIG_3[Phase 1 Tests code]
+    TIG --> TIG_4[Phase 2 Tests code]
+    TIG --> TIG_5[Phase 3 Tests code]
+    TIG --> TIG_6[Phase 4 Tests code]
+    TIG --> TIG_7[Running Tests]
+    
+    style Root fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    style VPS fill:#4dabf7,stroke:#1971c2,color:#fff
+    style MVC fill:#51cf66,stroke:#2f9e44,color:#fff
+    style TIG fill:#ffd43b,stroke:#f59f00,color:#000
 ```
 
 ---
