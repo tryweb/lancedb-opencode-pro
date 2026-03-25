@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "@opencode-ai/sdk";
-import type { EmbeddingProvider, MemoryRuntimeConfig, RetrievalMode } from "./types.js";
+import type { EmbeddingProvider, InjectionMode, SummarizationMode, CodeTruncationMode, MemoryRuntimeConfig, RetrievalMode } from "./types.js";
 import { clamp, expandHomePath, parseJsonObject, toBoolean, toNumber } from "./utils.js";
 
 const DEFAULT_DB_PATH = "~/.opencode/memory/lancedb";
@@ -65,6 +65,8 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       : process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS;
   const timeoutRaw = timeoutEnv ?? embeddingRaw.timeoutMs;
 
+  const injection = resolveInjectionConfig(raw, process.env);
+
   const resolvedConfig: MemoryRuntimeConfig = {
     provider,
     dbPath,
@@ -88,6 +90,7 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       recencyHalfLifeHours,
       importanceWeight,
     },
+    injection,
     includeGlobalScope: toBoolean(process.env.LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE ?? raw.includeGlobalScope, true),
     globalDetectionThreshold: Math.max(
       1,
@@ -122,6 +125,49 @@ function resolveEmbeddingProvider(raw: string | undefined): EmbeddingProvider {
   throw new Error(
     `[lancedb-opencode-pro] Invalid embedding provider "${raw}". Expected "ollama" or "openai".`,
   );
+}
+
+function resolveInjectionMode(raw: unknown): InjectionMode {
+  if (raw === "fixed" || raw === "budget" || raw === "adaptive") return raw;
+  return "fixed";
+}
+
+function resolveSummarizationMode(raw: unknown): SummarizationMode {
+  if (raw === "none" || raw === "truncate" || raw === "extract" || raw === "auto") return raw;
+  return "none";
+}
+
+function resolveCodeTruncationMode(raw: unknown): CodeTruncationMode {
+  if (raw === "smart" || raw === "signature" || raw === "preserve") return raw;
+  return "smart";
+}
+
+function resolveInjectionConfig(
+  raw: Record<string, unknown>,
+  env: NodeJS.ProcessEnv
+): import("./types.js").InjectionConfig {
+  const injectionRaw = (raw.injection ?? {}) as Record<string, unknown>;
+  const codeSummarizationRaw = (injectionRaw.codeSummarization ?? {}) as Record<string, unknown>;
+
+  return {
+    mode: resolveInjectionMode(env.LANCEDB_OPENCODE_PRO_INJECTION_MODE ?? injectionRaw.mode),
+    maxMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_MAX_MEMORIES ?? injectionRaw.maxMemories, 3))),
+    minMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES ?? injectionRaw.minMemories, 1))),
+    budgetTokens: Math.max(256, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS ?? injectionRaw.budgetTokens, 4096))),
+    maxCharsPerMemory: Math.max(100, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_MAX_CHARS ?? injectionRaw.maxCharsPerMemory, 1200))),
+    summarization: resolveSummarizationMode(env.LANCEDB_OPENCODE_PRO_INJECTION_SUMMARIZATION ?? injectionRaw.summarization),
+    summaryTargetChars: Math.max(50, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_SUMMARY_TARGET_CHARS ?? injectionRaw.summaryTargetChars, 300))),
+    scoreDropTolerance: clamp(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_SCORE_DROP_TOLERANCE ?? injectionRaw.scoreDropTolerance, 0.15), 0, 1),
+    injectionFloor: clamp(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_FLOOR ?? injectionRaw.injectionFloor, 0.2), 0, 1),
+    codeSummarization: {
+      enabled: toBoolean(env.LANCEDB_OPENCODE_PRO_CODE_SUMMARIZATION_ENABLED ?? codeSummarizationRaw.enabled, true),
+      pureCodeThreshold: Math.max(100, Math.floor(toNumber(codeSummarizationRaw.pureCodeThreshold, 500))),
+      maxCodeLines: Math.max(5, Math.floor(toNumber(codeSummarizationRaw.maxCodeLines, 15))),
+      codeTruncationMode: resolveCodeTruncationMode(codeSummarizationRaw.codeTruncationMode),
+      preserveComments: toBoolean(codeSummarizationRaw.preserveComments, true),
+      preserveImports: toBoolean(codeSummarizationRaw.preserveImports, false),
+    },
+  };
 }
 
 function validateEmbeddingConfig(embedding: MemoryRuntimeConfig["embedding"]): void {
@@ -188,6 +234,14 @@ function mergeMemoryConfig(
     retrieval: {
       ...((base.retrieval ?? {}) as Record<string, unknown>),
       ...((override.retrieval ?? {}) as Record<string, unknown>),
+    },
+    injection: {
+      ...((base.injection ?? {}) as Record<string, unknown>),
+      ...((override.injection ?? {}) as Record<string, unknown>),
+      codeSummarization: {
+        ...(((base.injection ?? {}) as Record<string, unknown>).codeSummarization ?? {}) as Record<string, unknown>,
+        ...(((override.injection ?? {}) as Record<string, unknown>).codeSummarization ?? {}) as Record<string, unknown>,
+      },
     },
   };
 }

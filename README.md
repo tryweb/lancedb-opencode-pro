@@ -240,6 +240,17 @@ Supported environment variables:
 - `LANCEDB_OPENCODE_PRO_UNUSED_DAYS_THRESHOLD`
 - `LANCEDB_OPENCODE_PRO_MIN_CAPTURE_CHARS`
 - `LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MODE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MAX_MEMORIES`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES`
+- `LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MAX_CHARS_PER_MEMORY`
+- `LANCEDB_OPENCODE_PRO_INJECTION_SUMMARIZATION`
+- `LANCEDB_OPENCODE_PRO_INJECTION_SUMMARY_TARGET_CHARS`
+- `LANCEDB_OPENCODE_PRO_INJECTION_SCORE_DROP_TOLERANCE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_INJECTION_FLOOR`
+- `LANCEDB_OPENCODE_PRO_INJECTION_CODE_SUMMARIZATION_MODE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_CODE_SUMMARIZATION_PRESERVE_STRUCTURE`
 
 ## What It Provides
 
@@ -356,6 +367,127 @@ Recommended review order in low-feedback environments:
 2. Review whether users repeated background context less often or needed fewer clarification turns.
 3. Check whether users still needed manual rescue through `memory_search` or issued correction-like responses.
 4. Run a bounded audit of recalled memories or skipped captures before concluding the system is helping.
+
+## Injection Control
+
+This provider supports configurable memory injection behavior, allowing you to control how recalled memories are processed before being injected into the LLM prompt.
+
+### Configuration
+
+Add an `injection` block to your sidecar config:
+
+```json
+{
+  "provider": "lancedb-opencode-pro",
+  "injection": {
+    "mode": "fixed",
+    "maxMemories": 3,
+    "minMemories": 1,
+    "budgetTokens": 2000,
+    "maxCharsPerMemory": 1200,
+    "summarization": "none",
+    "summaryTargetChars": 400,
+    "scoreDropTolerance": 0.15,
+    "injectionFloor": 0.3,
+    "codeSummarization": {
+      "mode": "truncate",
+      "preserveStructure": true
+    }
+  }
+}
+```
+
+### Injection Modes
+
+- **`fixed`** (default) — Always inject up to `maxMemories` memories regardless of content size. This preserves backward-compatible behavior.
+- **`budget`** — Limit total injected tokens to `budgetTokens`. The provider accumulates memories until the token budget is exhausted.
+- **`adaptive`** — Dynamically adjust injection count based on score drops. Stop injection when scores drop below `scoreDropTolerance` relative to the highest-scored memory.
+
+### Summarization Modes
+
+When `summarization` is set to `truncate` or `extract`, memories are summarized before injection:
+
+- **`none`** (default) — No summarization; inject full text.
+- **`truncate`** — Simple truncation to `summaryTargetChars` with ellipsis.
+- **`extract`** — Key sentence extraction for text, structure-preserving truncation for code.
+- **`auto`** — Content-aware summarization (truncate for text, preserve structure for code).
+
+### Code Handling
+
+The `codeSummarization` config controls how code snippets are processed:
+
+- **`mode`**: `"truncate"` | `"preserve"` | `"auto"` (default: `"truncate"`)
+- **`preserveStructure`**: When `true`, code truncation attempts to balance brackets and preserve syntactic validity.
+
+### Environment Variables
+
+All injection options can be overridden via environment variables:
+
+- `LANCEDB_OPENCODE_PRO_INJECTION_MODE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MAX_MEMORIES`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES`
+- `LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS`
+- `LANCEDB_OPENCODE_PRO_INJECTION_MAX_CHARS_PER_MEMORY`
+- `LANCEDB_OPENCODE_PRO_INJECTION_SUMMARIZATION`
+- `LANCEDB_OPENCODE_PRO_INJECTION_SUMMARY_TARGET_CHARS`
+- `LANCEDB_OPENCODE_PRO_INJECTION_SCORE_DROP_TOLERANCE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_INJECTION_FLOOR`
+- `LANCEDB_OPENCODE_PRO_INJECTION_CODE_SUMMARIZATION_MODE`
+- `LANCEDB_OPENCODE_PRO_INJECTION_CODE_SUMMARIZATION_PRESERVE_STRUCTURE`
+
+### Default Behavior
+
+The default configuration preserves backward compatibility:
+
+- `mode`: `"fixed"`
+- `maxMemories`: `3`
+- `summarization`: `"none"`
+
+This means without any `injection` configuration, the provider behaves identically to previous versions: always inject up to 3 memories with full text.
+
+### Example: Token Budget Mode
+
+For token-sensitive deployments, use budget mode to limit context size:
+
+```json
+{
+  "injection": {
+    "mode": "budget",
+    "budgetTokens": 1500,
+    "summarization": "truncate",
+    "summaryTargetChars": 400
+  }
+}
+```
+
+This configuration:
+1. Accumulates memories until total estimated tokens reach ~1500
+2. Truncates each memory to ~400 characters before injection
+3. Guarantees at least 1 memory is always included
+
+### Example: Adaptive Mode
+
+For quality-sensitive scenarios where you want to avoid low-relevance memories:
+
+```json
+{
+  "injection": {
+    "mode": "adaptive",
+    "maxMemories": 5,
+    "minMemories": 1,
+    "scoreDropTolerance": 0.15,
+    "injectionFloor": 0.3
+  }
+}
+```
+
+This configuration:
+1. Starts with up to 5 candidate memories
+2. Stops adding memories when score drops >15% from the top
+3. Ensures minimum score threshold (floor) prevents low-quality injection
+4. Always includes at least 1 memory
+
+---
 
 ## OpenAI Embedding Configuration
 

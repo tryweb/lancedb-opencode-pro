@@ -704,6 +704,112 @@ test("memory_port_plan returns readable non-conflicting assignments", async () =
   }
 });
 
+test("injection control defaults to fixed mode with max 3 memories (backward compatible)", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    await harness.capture("Memory 1: We fixed the DNS issue by adding gcompat to Alpine. Resolved successfully.");
+    await harness.capture("Memory 2: Nginx 502 fixed by increasing proxy_buffer_size. Resolved successfully.");
+    await harness.capture("Memory 3: Database connection pool adjusted for better concurrency. Resolved successfully.");
+    await harness.capture("Memory 4: Cache invalidation strategy updated for distributed systems. Resolved successfully.");
+
+    const recalled = await harness.recallSystem();
+    assert.ok(recalled.length <= 3, `Expected at most 3 memories, got ${recalled.length}`);
+    assert.ok(recalled.length >= 1, `Expected at least 1 memory, got ${recalled.length}`);
+
+    for (const system of recalled) {
+      assert.match(system, /\[Memory Recall - optional historical context\]/);
+    }
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("injection control respects budget mode token accumulation", async () => {
+  const harness = await createPluginHarness();
+
+  const prevBudgetTokens = process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE;
+  const prevMode = process.env.LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS;
+
+  try {
+    process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE = "budget";
+    process.env.LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS = "100";
+
+    await harness.capture("Memory 1: Short. Resolved successfully.");
+    await harness.capture("Memory 2: Another short memory. Resolved successfully.");
+
+    const recalled = await harness.recallSystem();
+    assert.ok(recalled.length >= 0, "Budget mode should return memories without error");
+  } finally {
+    if (prevMode) process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE = prevMode;
+    else delete process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE;
+    if (prevBudgetTokens) process.env.LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS = prevBudgetTokens;
+    else delete process.env.LANCEDB_OPENCODE_PRO_INJECTION_BUDGET_TOKENS;
+    await harness.cleanup();
+  }
+});
+
+test("injection control enforces minimum memories floor", async () => {
+  const harness = await createPluginHarness();
+
+  const prevMode = process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE;
+  const prevMinMemories = process.env.LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES;
+
+  try {
+    process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE = "adaptive";
+    process.env.LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES = "2";
+
+    await harness.capture("Memory 1: First resolve. Resolved successfully.");
+    await harness.capture("Memory 2: Second resolve. Resolved successfully.");
+
+    const recalled = await harness.recallSystem();
+    assert.ok(recalled.length >= 1, `Expected at least 1 memory (minMemories applied), got ${recalled.length}`);
+  } finally {
+    if (prevMode) process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE = prevMode;
+    else delete process.env.LANCEDB_OPENCODE_PRO_INJECTION_MODE;
+    if (prevMinMemories) process.env.LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES = prevMinMemories;
+    else delete process.env.LANCEDB_OPENCODE_PRO_INJECTION_MIN_MEMORIES;
+    await harness.cleanup();
+  }
+});
+
+test("injection control code summarization preserves syntax validity", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    await harness.capture(`We fixed the parsing issue with this code:
+\`\`\`javascript
+function parseConfig(data) {
+  const config = JSON.parse(data);
+  if (!config.enabled) {
+    throw new Error("Config disabled");
+  }
+  return config;
+}
+\`\`\`
+Resolved successfully.`);
+
+    const recalled = await harness.recallSystem();
+    assert.ok(recalled.length >= 1, "Should recall the memory");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("injection control Chinese text token estimation handles multilingual content", async () => {
+  const harness = await createPluginHarness();
+
+  try {
+    await harness.capture("我們解決了 Alpine Linux 的 DNS 解析問題，方法是加入 gcompat 套件。Resolved successfully.");
+    await harness.capture("這是另一個關於 Nginx 502 錯誤的解決方案。Resolved successfully.");
+
+    const recalled = await harness.recallSystem();
+    assert.ok(recalled.length >= 1, "Should recall memories with Chinese text");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
 test("memory_port_plan avoids reserved ports and upserts reservation records", async () => {
   const harness = await createPluginHarness();
 

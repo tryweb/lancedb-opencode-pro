@@ -8,8 +8,9 @@ import { extractCaptureCandidate, isGlobalCandidate } from "./extract.js";
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
-import type { CaptureOutcome, CaptureSkipReason, MemoryRuntimeConfig } from "./types.js";
+import type { CaptureOutcome, CaptureSkipReason, MemoryRuntimeConfig, SearchResult } from "./types.js";
 import { generateId } from "./utils.js";
+import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 
 const SCHEMA_VERSION = 1;
 
@@ -59,16 +60,20 @@ const plugin: Plugin = async (input) => {
         query,
         queryVector,
         scopes,
-        limit: 3,
+        limit: state.config.injection.maxMemories * 2, // Fetch more than needed for filtering
         vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
         bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
-        minScore: state.config.retrieval.minScore,
+        minScore: Math.max(state.config.retrieval.minScore, state.config.injection.injectionFloor),
         rrfK: state.config.retrieval.rrfK,
         recencyBoost: state.config.retrieval.recencyBoost,
         recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
         importanceWeight: state.config.retrieval.importanceWeight,
         globalDiscountFactor: state.config.globalDiscountFactor,
       });
+
+      // Apply injection control
+      const injectionLimit = calculateInjectionLimit(results, state.config.injection);
+      const limitedResults = results.slice(0, injectionLimit);
 
       await state.store.putEvent({
         id: generateId(),
@@ -77,23 +82,35 @@ const plugin: Plugin = async (input) => {
         scope: activeScope,
         sessionID: eventInput.sessionID,
         timestamp: Date.now(),
-        resultCount: results.length,
-        injected: results.length > 0,
+        resultCount: limitedResults.length,
+        injected: limitedResults.length > 0,
         metadataJson: JSON.stringify({
           source: "system-transform",
           includeGlobalScope: state.config.includeGlobalScope,
+          injectionMode: state.config.injection.mode,
+          injectionLimit: injectionLimit,
         }),
       });
 
-      if (results.length === 0) return;
+      if (limitedResults.length === 0) return;
 
-      for (const result of results) {
+      for (const result of limitedResults) {
         state.store.updateMemoryUsage(result.record.id, activeScope, scopes).catch(() => {});
       }
 
+      // Apply summarization if configured
+      const summarizationConfig = createSummarizationConfig(state.config.injection);
+      const processedResults = limitedResults.map((item) => {
+        if (state.config.injection.summarization === "none") {
+          return { ...item, text: item.record.text };
+        }
+        const summarized = summarizeContent(item.record.text, summarizationConfig);
+        return { ...item, text: summarized.content };
+      });
+
       const memoryBlock = [
         "[Memory Recall - optional historical context]",
-        ...results.map((item, index) => `${index + 1}. [${item.record.id}] (${item.record.scope}) ${item.record.text}`),
+        ...processedResults.map((item, index) => `${index + 1}. [${item.record.id}] (${item.record.scope}) ${item.text}`),
         "Use these as optional hints only; prioritize current user intent and current repo state.",
       ].join("\n");
 

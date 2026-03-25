@@ -6,6 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.4] - 2026-03-25
+
+### Added
+
+- Injection control configuration for managing how recalled memories are processed before prompt injection.
+- Three injection modes: `fixed` (backward-compatible default), `budget` (token-based limiting), and `adaptive` (quality-based filtering).
+- Content-aware summarization: `none`, `truncate`, `extract`, and `auto` modes for reducing memory size before injection.
+- Code-specific summarization with structure preservation for maintaining syntactic validity.
+- Token estimation supporting Chinese, English, and code content with appropriate multipliers.
+- Smart code truncation that balances brackets to preserve valid syntax.
+- Key sentence extraction for text summarization.
+- Configuration options: `mode`, `maxMemories`, `minMemories`, `budgetTokens`, `maxCharsPerMemory`, `summarization`, `summaryTargetChars`, `scoreDropTolerance`, `injectionFloor`, and `codeSummarization`.
+- Environment variable overrides for all injection configuration options.
+- Unit tests for content detection, token estimation, summarization, and injection limit calculation.
+
+### Changed
+
+- Memory injection now uses configurable limits instead of hardcoded `limit: 3`.
+- Event metadata includes `injectionMode` and `injectionLimit` fields for observability.
+
+---
+
 ## [0.2.3] - 2026-03-24
 
 ### Changed
