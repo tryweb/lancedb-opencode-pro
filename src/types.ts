@@ -2,6 +2,26 @@ export type EmbeddingProvider = "ollama" | "openai";
 
 export type RetrievalMode = "hybrid" | "vector";
 
+export type InjectionMode = "fixed" | "budget" | "adaptive";
+
+export type SummarizationMode = "none" | "truncate" | "extract" | "auto";
+
+export type CodeTruncationMode = "smart" | "signature" | "preserve";
+
+export type ContentType = "text" | "code" | "mixed";
+
+export interface ContentDetection {
+  hasCode: boolean;
+  isPureCode: boolean;
+}
+
+export interface SummarizedContent {
+  type: "kept" | "truncated" | "summarized" | "mixed";
+  content: string;
+  originalLength: number;
+  estimatedTokens: number;
+}
+
 export type MemoryCategory = "preference" | "fact" | "decision" | "entity" | "other";
 
 export type CaptureOutcome = "considered" | "skipped" | "stored";
@@ -39,11 +59,45 @@ export interface RetrievalConfig {
   importanceWeight: number;
 }
 
+export interface CodeSummarizationConfig {
+  enabled: boolean;
+  pureCodeThreshold: number;
+  maxCodeLines: number;
+  codeTruncationMode: CodeTruncationMode;
+  preserveComments: boolean;
+  preserveImports: boolean;
+}
+
+export interface InjectionConfig {
+  mode: InjectionMode;
+  maxMemories: number;
+  minMemories: number;
+  budgetTokens: number;
+  maxCharsPerMemory: number;
+  summarization: SummarizationMode;
+  summaryTargetChars: number;
+  scoreDropTolerance: number;
+  injectionFloor: number;
+  codeSummarization: CodeSummarizationConfig;
+}
+
+export interface SummarizationConfig {
+  mode: SummarizationMode;
+  textThreshold: number;
+  codeThreshold: number;
+  summaryTargetChars: number;
+  maxCodeLines: number;
+  codeTruncationMode: CodeTruncationMode;
+  preserveComments: boolean;
+  preserveImports: boolean;
+}
+
 export interface MemoryRuntimeConfig {
   provider: string;
   dbPath: string;
   embedding: EmbeddingConfig;
   retrieval: RetrievalConfig;
+  injection: InjectionConfig;
   includeGlobalScope: boolean;
   globalDetectionThreshold: number;
   globalDiscountFactor: number;
