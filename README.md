@@ -663,7 +663,7 @@ The project provides layered validation workflows that can run locally or inside
 | `npm run verify` | Typecheck + build + effectiveness workflow + retrieval (quick release check) |
 | `npm run verify:full` | All of the above + benchmark + `npm pack` (full release gate) |
 
-Threshold policy and benchmark profiles are documented in `docs/benchmark-thresholds.md`.
+Threshold policy and benchmark profiles are documented in `docs/memory-validation-checklist.md` (Phase 4.4).
 Acceptance evidence mapping and archive/ship gate policy are documented in `docs/release-readiness.md`.
 
 ## Maintainer Release SOP
