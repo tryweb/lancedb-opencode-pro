@@ -1,0 +1,23 @@
+FROM ubuntu:latest
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /workspace
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://opencode.ai/install | bash
+
+ENV PATH="/root/.opencode/bin:${PATH}"
+
+ARG NODE_VERSION=22
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 4096
+
+CMD ["opencode", "serve", "--port", "4096", "--hostname", "0.0.0.0"]

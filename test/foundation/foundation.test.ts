@@ -473,3 +473,256 @@ test("recency and importance multipliers influence ranking order", async () => {
     await cleanupDbPath(dbPath);
   }
 });
+
+// ─────────────────────────────────────────────
+// Dedup — Consolidation (§6)
+// ─────────────────────────────────────────────
+
+test("consolidateDuplicates returns zeros when scope is empty", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const result = await store.consolidateDuplicates("project:empty-scope", 0.95);
+    assert.equal(result.mergedPairs, 0);
+    assert.equal(result.updatedRecords, 0);
+    assert.equal(result.skippedRecords, 0);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("consolidateDuplicates merges two similar memories (cosine >= 0.95), older deleted, newer retains mergedFrom", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:dedup-test";
+    const now = Date.now();
+    const sharedText = "gateway 502 bad gateway resolved by restarting nginx";
+    const vec = createVector(384, 0.5);
+    await store.put(createTestRecord({ id: "mem-older", scope, text: sharedText, vector: vec, timestamp: now - 10_000, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-newer", scope, text: sharedText, vector: vec, timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    const result = await store.consolidateDuplicates(scope, 0.95);
+    assert.equal(result.mergedPairs, 1);
+    assert.equal(result.updatedRecords, 2);
+    assert.equal(result.skippedRecords, 0);
+    const listed = await store.list(scope, 10);
+    const ids = listed.map((r) => r.id);
+    assert.ok(ids.includes("mem-newer"), "newer record should still be present");
+    assert.ok(!ids.includes("mem-older"), "older merged record should not appear in normal list");
+    const newerRecord = listed.find((r) => r.id === "mem-newer")!;
+    const newerMeta = JSON.parse(newerRecord.metadataJson);
+    assert.equal(newerMeta.mergedFrom, "mem-older");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("consolidateDuplicates skips records recalled within last 5 minutes", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:recall-guard";
+    const now = Date.now();
+    const vec = createVector(384, 0.5);
+    await store.put(createTestRecord({ id: "mem-recently-recalled", scope, text: "recently recalled memory", vector: vec, timestamp: now - 10_000, lastRecalled: now - 60_000, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-not-recalled", scope, text: "not recalled memory", vector: vec, timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    const result = await store.consolidateDuplicates(scope, 0.95);
+    assert.equal(result.skippedRecords, 1);
+    assert.equal(result.mergedPairs, 0);
+    assert.equal(result.updatedRecords, 0);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("consolidateDuplicates is idempotent (second call returns 0 merged)", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:idempotent";
+    const now = Date.now();
+    const vec = createVector(384, 0.5);
+    await store.put(createTestRecord({ id: "mem-old", scope, text: "duplicate content", vector: vec, timestamp: now - 10_000, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-new", scope, text: "duplicate content", vector: vec, timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    const first = await store.consolidateDuplicates(scope, 0.95);
+    assert.equal(first.mergedPairs, 1);
+    const second = await store.consolidateDuplicates(scope, 0.95);
+    assert.equal(second.mergedPairs, 0);
+    assert.equal(second.updatedRecords, 0);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("summarizeEvents returns duplicates.flaggedCount from flagged memory records", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:dedup-flags";
+    const now = Date.now();
+    await store.put(createTestRecord({ id: "mem-normal", scope, text: "normal memory", vector: createVector(384, 0.1), timestamp: now - 5_000, metadataJson: JSON.stringify({ isPotentialDuplicate: false }) }));
+    await store.put(createTestRecord({ id: "mem-flagged", scope, text: "similar to above", vector: createVector(384, 0.1), timestamp: now, metadataJson: JSON.stringify({ isPotentialDuplicate: true, duplicateOf: "mem-normal" }) }));
+    const summary = await store.summarizeEvents(scope, false);
+    assert.equal(summary.duplicates.flaggedCount, 1);
+    assert.equal(summary.duplicates.consolidatedCount, 0);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("summarizeEvents returns duplicates.consolidatedCount from merged memory records", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:dedup-merged";
+    const now = Date.now();
+    const vec = createVector(384, 0.5);
+    await store.put(createTestRecord({ id: "mem-old", scope, text: "to be merged", vector: vec, timestamp: now - 10_000, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-new", scope, text: "to be merged", vector: vec, timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    await store.consolidateDuplicates(scope, 0.95);
+    const summary = await store.summarizeEvents(scope, false);
+    assert.equal(summary.duplicates.consolidatedCount, 1);
+    assert.equal(summary.duplicates.flaggedCount, 0);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("pruneScope keeps newest flagged duplicate when maxEntries forces deletion", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:prune-flagged";
+    const now = Date.now();
+    for (let i = 0; i < 3; i++) {
+      await store.put(createTestRecord({ id: `flagged-${i}`, scope, text: `flagged content ${i}`, vector: createVector(384, i * 0.1), timestamp: now - i * 10_000, metadataJson: JSON.stringify({ isPotentialDuplicate: true }) }));
+    }
+    const deleted = await store.pruneScope(scope, 1);
+    assert.equal(deleted, 2);
+    const remaining = await store.list(scope, 10);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].id, "flagged-0");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("pruneScope deletes unflagged records only after all flagged records are removed", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:prune-unflagged";
+    const now = Date.now();
+    await store.put(createTestRecord({ id: "flagged-old", scope, text: "old flagged", vector: createVector(384, 0.1), timestamp: now - 20_000, metadataJson: JSON.stringify({ isPotentialDuplicate: true }) }));
+    await store.put(createTestRecord({ id: "unflagged-new", scope, text: "new unflagged", vector: createVector(384, 0.9), timestamp: now, metadataJson: JSON.stringify({ isPotentialDuplicate: false }) }));
+    await store.put(createTestRecord({ id: "flagged-newer", scope, text: "newer flagged", vector: createVector(384, 0.2), timestamp: now - 10_000, metadataJson: JSON.stringify({ isPotentialDuplicate: true }) }));
+    const deleted = await store.pruneScope(scope, 2);
+    assert.equal(deleted, 1);
+    const remaining = await store.list(scope, 10);
+    const ids = remaining.map((r) => r.id);
+    assert.ok(ids.includes("unflagged-new"), "unflagged newest should be kept");
+    assert.ok(!ids.includes("flagged-old"), "oldest flagged should be deleted first");
+    assert.ok(ids.includes("flagged-newer"), "newer flagged should be kept (newest among flagged)");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+// ─────────────────────────────────────────────
+// Dedup — Search Display (§8)
+// ─────────────────────────────────────────────
+
+test("store.search returns records with isPotentialDuplicate=true for duplicate marker display", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:search-display";
+    const now = Date.now();
+    await store.put(createTestRecord({ id: "mem-normal", scope, text: "normal content abc", vector: createVector(384, 0.3), timestamp: now - 5_000, metadataJson: JSON.stringify({ isPotentialDuplicate: false }) }));
+    await store.put(createTestRecord({ id: "mem-flagged", scope, text: "flagged content abc", vector: createVector(384, 0.3), timestamp: now, metadataJson: JSON.stringify({ isPotentialDuplicate: true, duplicateOf: "mem-normal" }) }));
+    const results = await store.search({ query: "content abc", queryVector: createVector(384, 0.3), scopes: [scope], limit: 10, vectorWeight: 1.0, bm25Weight: 0.0, minScore: 0.0, rrfK: 60, recencyBoost: false, globalDiscountFactor: 1.0 });
+    const flaggedRecord = results.find((r) => r.record.id === "mem-flagged");
+    assert.ok(flaggedRecord, "flagged record should be returned by search");
+    const meta = JSON.parse(flaggedRecord!.record.metadataJson);
+    assert.equal(meta.isPotentialDuplicate, true);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("store.search returns records with isPotentialDuplicate=false without marker", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:search-no-marker";
+    const now = Date.now();
+    await store.put(createTestRecord({ id: "mem-unflagged", scope, text: "unflagged content xyz", vector: createVector(384, 0.4), timestamp: now, metadataJson: JSON.stringify({ isPotentialDuplicate: false }) }));
+    const results = await store.search({ query: "content xyz", queryVector: createVector(384, 0.4), scopes: [scope], limit: 10, vectorWeight: 1.0, bm25Weight: 0.0, minScore: 0.0, rrfK: 60, recencyBoost: false, globalDiscountFactor: 1.0 });
+    const unflaggedRecord = results.find((r) => r.record.id === "mem-unflagged");
+    assert.ok(unflaggedRecord, "unflagged record should be returned");
+    const meta = JSON.parse(unflaggedRecord!.record.metadataJson);
+    assert.notEqual(meta.isPotentialDuplicate, true);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("store.search excludes records with status=merged", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:search-merged";
+    const now = Date.now();
+    await store.put(createTestRecord({ id: "mem-active", scope, text: "active content def", vector: createVector(384, 0.5), timestamp: now, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-merged", scope, text: "merged content def", vector: createVector(384, 0.5), timestamp: now - 3_000, metadataJson: JSON.stringify({ status: "merged", mergedInto: "mem-active" }) }));
+    const results = await store.search({ query: "content def", queryVector: createVector(384, 0.5), scopes: [scope], limit: 10, vectorWeight: 1.0, bm25Weight: 0.0, minScore: 0.0, rrfK: 60, recencyBoost: false, globalDiscountFactor: 1.0 });
+    const ids = results.map((r) => r.record.id);
+    assert.ok(ids.includes("mem-active"), "active record should be returned");
+    assert.ok(!ids.includes("mem-merged"), "merged record should not be returned");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+// ─────────────────────────────────────────────
+// Dedup — Capture Flagging Integration (§7)
+// ─────────────────────────────────────────────
+
+test("flushAutoCapture similarity check uses vectorWeight=1.0 bm25Weight=0.0 (cosine-only)", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:capture-similarity";
+    const now = Date.now();
+    const sharedText = "nginx 502 bad gateway resolved by restarting the server";
+    const vec = createVector(384, 0.5);
+    await store.put(createTestRecord({ id: "mem-first", scope, text: sharedText, vector: vec, timestamp: now - 5_000, metadataJson: JSON.stringify({}) }));
+    const results = await store.search({ query: sharedText, queryVector: vec, scopes: [scope], limit: 5, vectorWeight: 1.0, bm25Weight: 0.0, minScore: 0.0, rrfK: 60, recencyBoost: false, globalDiscountFactor: 1.0 });
+    assert.ok(results.length >= 1, "should find the first memory");
+    // score includes importanceFactor (1 + 0.4 * 0.5 = 1.2), use vectorScore for raw cosine
+    const topVectorScore = results[0]!.vectorScore;
+    assert.ok(topVectorScore >= 0.99, `identical vectors should have cosine ~1.0, got ${topVectorScore}`);
+    assert.ok(Math.abs(topVectorScore - 1.0) < 0.0001, `identical vectors should have raw cosine ≈ 1.0, got ${topVectorScore}`);
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("consolidateDuplicates merges two records with cosine=1.0 (identical vectors)", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:consolidate-identical";
+    const now = Date.now();
+    const sharedText = "same content for duplicate detection";
+    const vec = createVector(384, 0.5);
+    await store.put(createTestRecord({ id: "mem-old", scope, text: sharedText, vector: vec, timestamp: now - 10_000, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-new", scope, text: sharedText, vector: vec, timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    const result = await store.consolidateDuplicates(scope, 0.95);
+    assert.equal(result.mergedPairs, 1, "should merge the identical pair");
+    assert.equal(result.updatedRecords, 2, "should update both records");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("consolidateDuplicates does not merge records with very low cosine similarity", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:no-merge-dissimilar";
+    const now = Date.now();
+    await store.put(createTestRecord({ id: "mem-a", scope, text: "nginx 502 error resolved", vector: createVector(384, 0.1), timestamp: now - 5_000, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    await store.put(createTestRecord({ id: "mem-b", scope, text: "postgres pool exhausted fixed", vector: createVector(384, -0.1), timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
+    const result = await store.consolidateDuplicates(scope, 0.92);
+    assert.equal(result.mergedPairs, 0, "should not merge records with very low cosine similarity");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});

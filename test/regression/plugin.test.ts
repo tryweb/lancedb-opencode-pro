@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveMemoryConfig } from "../../src/config.js";
 import plugin from "../../src/index.js";
-import { cleanupDbPath, createScopedRecords, createTempDbPath, createTestStore, createVector, seedLegacyEffectivenessEventsTable } from "../setup.js";
+import { deriveProjectScope } from "../../src/scope.js";
+import { cleanupDbPath, createScopedRecords, createTempDbPath, createTestRecord, createTestStore, createVector, seedLegacyEffectivenessEventsTable } from "../setup.js";
 
 const SESSION_ID = "sess-test-001";
-const WORKTREE = "/workspace/project-under-test";
+// Use workspace path (Docker) or real project path (host) so deriveProjectScope() returns consistent scope
+const WORKTREE = "/workspace";
+const TEST_SCOPE = deriveProjectScope(WORKTREE);
 
 type MessagePart = { type: "text"; text: string };
 type SessionMessage = { info: { role: string }; parts: MessagePart[] };
@@ -99,6 +102,11 @@ async function createPluginHarness(options?: {
         vectorWeight: 0.7,
         bm25Weight: 0.3,
         minScore: 0.01,
+      },
+      dedup: {
+        enabled: true,
+        writeThreshold: 0.92,
+        consolidateThreshold: 0.95,
       },
       includeGlobalScope: true,
       minCaptureChars: options?.minCaptureChars ?? 30,
@@ -869,6 +877,84 @@ test("memory_port_plan avoids reserved ports and upserts reservation records", a
 
     assert.match(searchOutput, /host=24081/);
     assert.doesNotMatch(searchOutput, /host=24080/);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("memory_consolidate returns error when confirm !== true", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const result = await withPatchedFetch(() =>
+      harness.toolHooks.memory_consolidate.execute({ scope: "project:test", confirm: false }, harness.context),
+    );
+    assert.match(result, /confirm.*true/);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("memory_consolidate returns metrics when confirm === true", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const result = await withPatchedFetch(() =>
+      harness.toolHooks.memory_consolidate.execute({ scope: "project:test", confirm: true }, harness.context),
+    );
+    const parsed = JSON.parse(result) as { scope: string; mergedPairs: number; updatedRecords: number; skippedRecords: number };
+    assert.equal(parsed.scope, "project:test");
+    assert.equal(typeof parsed.mergedPairs, "number");
+    assert.equal(typeof parsed.updatedRecords, "number");
+    assert.equal(typeof parsed.skippedRecords, "number");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("second capture with >0.92 similarity to first is written with isPotentialDuplicate=true and gets merged", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const text = "nginx 502 bad gateway error fixed by restarting the server and confirming upstream health checks";
+    await harness.capture(text);
+    await harness.capture(text);
+    const result = await withPatchedFetch(() =>
+      harness.toolHooks.memory_consolidate.execute({ scope: TEST_SCOPE, confirm: true }, harness.context),
+    );
+    const parsed = JSON.parse(result) as { mergedPairs: number; updatedRecords: number };
+    assert.equal(parsed.mergedPairs, 1, "should merge one pair of duplicate memories");
+    assert.equal(parsed.updatedRecords, 2, "should update both records (older merged, newer has mergedFrom)");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("second capture with <0.92 similarity to first is written with isPotentialDuplicate=false", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const firstText = "nginx 502 error resolved by restarting the server and confirming upstream checks are healthy";
+    const secondText = "postgres connection pool exhausted error fixed by increasing max_connections and restarting the database service";
+    await harness.capture(firstText);
+    await harness.capture(secondText);
+    const searchResult = await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute({ query: secondText, limit: 5 }, harness.context),
+    );
+    assert.match(searchResult, new RegExp(secondText.substring(0, 20)));
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("dedup config: when enabled=true (default), second identical capture is flagged and merged", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const identicalText = "server error resolved by restarting nginx service and confirming upstream health";
+    await harness.capture(identicalText);
+    await harness.capture(identicalText);
+    const result = await withPatchedFetch(() =>
+      harness.toolHooks.memory_consolidate.execute({ scope: TEST_SCOPE, confirm: true }, harness.context),
+    );
+    const parsed = JSON.parse(result) as { mergedPairs: number; updatedRecords: number };
+    assert.equal(parsed.mergedPairs, 1, "identical texts should be detected as duplicates and merged");
+    assert.equal(parsed.updatedRecords, 2);
   } finally {
     await harness.cleanup();
   }

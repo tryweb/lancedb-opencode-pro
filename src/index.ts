@@ -30,6 +30,10 @@ const plugin: Plugin = async (input) => {
       if (event.type === "session.idle" || event.type === "session.compacted") {
         const sessionID = event.properties.sessionID;
         await flushAutoCapture(sessionID, state, input.client);
+        if (event.type === "session.compacted" && state.config.dedup.enabled) {
+          const activeScope = deriveProjectScope(input.worktree);
+          state.store.consolidateDuplicates(activeScope, state.config.dedup.consolidateThreshold).catch(() => {});
+        }
       }
     },
     "experimental.text.complete": async (eventInput, eventOutput) => {
@@ -173,7 +177,9 @@ const plugin: Plugin = async (input) => {
           return results
             .map((item, idx) => {
               const percent = Math.round(item.score * 100);
-              return `${idx + 1}. [${item.record.id}] (${item.record.scope}) ${item.record.text} [${percent}%]`;
+              const meta = JSON.parse(item.record.metadataJson || "{}");
+              const duplicateMarker = meta.isPotentialDuplicate ? " (duplicate)" : "";
+              return `${idx + 1}. [${item.record.id}]${duplicateMarker} (${item.record.scope}) ${item.record.text} [${percent}%]`;
             })
             .join("\n");
         },
@@ -442,6 +448,43 @@ const plugin: Plugin = async (input) => {
             .join("\n");
         },
       }),
+      memory_consolidate: tool({
+        description: "Scope-internally merge near-duplicate memories. Use to clean up accumulated duplicates.",
+        args: {
+          scope: tool.schema.string().optional(),
+          confirm: tool.schema.boolean().default(false),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          if (!args.confirm) {
+            return "Rejected: memory_consolidate requires confirm=true.";
+          }
+          const targetScope = args.scope ?? deriveProjectScope(context.worktree);
+          const result = await state.store.consolidateDuplicates(targetScope, state.config.dedup.consolidateThreshold);
+          return JSON.stringify({ scope: targetScope, ...result }, null, 2);
+        },
+      }),
+      memory_consolidate_all: tool({
+        description: "Consolidate duplicates across global scope and current project scope. Used by external cron jobs for daily cleanup.",
+        args: {
+          confirm: tool.schema.boolean().default(false),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          if (!args.confirm) {
+            return "Rejected: memory_consolidate_all requires confirm=true.";
+          }
+          const projectScope = deriveProjectScope(context.worktree);
+          const globalResult = await state.store.consolidateDuplicates("global", state.config.dedup.consolidateThreshold);
+          const projectResult = await state.store.consolidateDuplicates(projectScope, state.config.dedup.consolidateThreshold);
+          return JSON.stringify({
+            global: { scope: "global", ...globalResult },
+            project: { scope: projectScope, ...projectResult },
+          }, null, 2);
+        },
+      }),
       memory_port_plan: tool({
         description: "Plan non-conflicting host ports for compose services and optionally persist reservations",
         args: {
@@ -610,7 +653,7 @@ async function getLastUserText(
   }
 }
 
-async function flushAutoCapture(
+  async function flushAutoCapture(
   sessionID: string,
   state: RuntimeState,
   client: { session: { get: (input: { path: { id: string } }) => Promise<unknown> } },
@@ -680,6 +723,28 @@ async function flushAutoCapture(
     return;
   }
 
+  let isPotentialDuplicate = false;
+  let duplicateOf: string | null = null;
+
+  if (state.config.dedup.enabled) {
+    const similar = await state.store.search({
+      query: result.candidate.text,
+      queryVector: vector,
+      scopes: [activeScope],
+      limit: 1,
+      vectorWeight: 1.0,
+      bm25Weight: 0.0,
+      minScore: 0.0,
+      rrfK: 60,
+      recencyBoost: false,
+      globalDiscountFactor: 1.0,
+    });
+    if (similar.length > 0 && similar[0].score >= state.config.dedup.writeThreshold) {
+      isPotentialDuplicate = true;
+      duplicateOf = similar[0].record.id;
+    }
+  }
+
   const memoryId = generateId();
 
   await state.store.put({
@@ -699,6 +764,8 @@ async function flushAutoCapture(
     metadataJson: JSON.stringify({
       source: "auto-capture",
       sessionID,
+      isPotentialDuplicate,
+      duplicateOf,
     }),
   });
 

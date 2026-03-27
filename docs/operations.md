@@ -17,6 +17,8 @@
 | `memory_scope_promote` | Promote memory to global scope | No |
 | `memory_scope_demote` | Demote memory from global scope | No |
 | `memory_global_list` | List global memories | No |
+| `memory_consolidate` | Merge near-duplicate memories in a scope | Yes (`confirm=true`) |
+| `memory_consolidate_all` | Consolidate global + current project scope | Yes (`confirm=true`) |
 
 ### Common Workflows
 
@@ -28,6 +30,39 @@ memory_stats
 
 # Check effectiveness
 memory_effectiveness
+```
+
+#### Scheduled Consolidation (Daily Cleanup)
+
+The memory system performs opportunistic consolidation on `session.compacted` events. For environments with long-running sessions or infrequent activity, a daily cron job ensures duplicates are merged even without session compaction.
+
+**Example cron script** (`~/.config/opencode/consolidate-cron.sh`):
+
+```bash
+#!/bin/bash
+# Consolidate duplicates daily at 03:00 UTC
+# Run via: opencode --memory-consolidate-all --confirm
+#
+# Note: Requires OpenCode CLI with lancedb-opencode-pro plugin installed.
+# The AI will invoke memory_consolidate_all tool automatically when you ask.
+
+0 3 * * * /path/to/opencode --memory-consolidate-all --confirm >> ~/.opencode/logs/consolidation.log 2>&1
+```
+
+**Key configuration options** (via environment or `lancedb-opencode-pro.json`):
+
+| Variable | Default | Description |
+|---|---|---|
+| `LANCEDB_OPENCODE_PRO_DEDUP_ENABLED` | `true` | Enable/disable dedup |
+| `LANCEDB_OPENCODE_PRO_DEDUP_WRITE_THRESHOLD` | `0.92` | Similarity threshold for flagging new memories |
+| `LANCEDB_OPENCODE_PRO_DEDUP_CONSOLIDATE_THRESHOLD` | `0.95` | Similarity threshold for merging in consolidation |
+
+**Viewing consolidation metrics**:
+
+```bash
+memory_effectiveness
+# Look for: duplicates.flaggedCount (memories flagged as potential duplicates)
+# Look for: duplicates.consolidatedCount (memories merged via consolidation)
 ```
 
 #### Search and Verify
