@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.5] - 2026-03-27
+
+### Added
+
+- Similarity-based duplicate flagging during auto-capture: new captures are checked against existing memories in the same scope using cosine similarity.
+- `DedupConfig` with `enabled`, `writeThreshold` (default: 0.92), and `consolidateThreshold` (default: 0.95) for controlling dedup behavior.
+- `memory_consolidate` tool: manually triggers merge of similar memories within a scope.
+- `memory_consolidate_all` tool: consolidates duplicates across global and project scopes.
+- `isPotentialDuplicate` and `duplicateOf` fields in `MemoryRecord.metadata` for tracking potential duplicates.
+- `EffectivenessSummary.duplicates` section with `flaggedCount` and `consolidatedCount` for observability.
+- `consolidateDuplicates()` store method: merges similar memory pairs where cosine similarity >= consolidateThreshold.
+- Pruning preserves newest flagged duplicates when maxEntries forces deletion.
+
+### Changed
+
+- Capture events now include `skipReason: "duplicate-similarity"` when a new memory exceeds writeThreshold.
+- `summarizeEvents()` returns counts of flagged and consolidated memories.
+- Search results exclude `status=merged` records from display.
+
+---
+
 ## [0.2.4] - 2026-03-25
 
 ### Added

@@ -675,7 +675,7 @@ Use this flow when publishing a new version to npm.
 
 ```bash
 docker compose build --no-cache && docker compose up -d
-docker compose exec app npm run release:check
+docker compose exec opencode-dev npm run release:check
 ```
 
 3. Confirm npm authentication:
@@ -731,8 +731,8 @@ ls -l dist dist-test/src 2>/dev/null
 
 ```bash
 docker compose build --no-cache && docker compose up -d
-docker compose exec app npm run typecheck
-docker compose exec app npm run build
+docker compose exec opencode-dev npm run typecheck
+docker compose exec opencode-dev npm run build
 ```
 
 ### Running validation inside Docker
@@ -741,16 +741,16 @@ docker compose exec app npm run build
 docker compose build --no-cache && docker compose up -d
 
 # Quick release check
-docker compose exec app npm run verify
+docker compose exec opencode-dev npm run verify
 
 # Full release gate (includes benchmark + pack)
-docker compose exec app npm run verify:full
+docker compose exec opencode-dev npm run verify:full
 
 # Individual workflows
-docker compose exec app npm run test:foundation
-docker compose exec app npm run test:regression
-docker compose exec app npm run test:retrieval
-docker compose exec app npm run benchmark:latency
+docker compose exec opencode-dev npm run test:foundation
+docker compose exec opencode-dev npm run test:regression
+docker compose exec opencode-dev npm run test:retrieval
+docker compose exec opencode-dev npm run benchmark:latency
 ```
 
 ### Operator verification
@@ -759,15 +759,15 @@ After running `npm run verify:full`, operators can inspect the following:
 
 ```bash
 # Confirm the packaged build is installable
-docker compose exec app ls -la lancedb-opencode-pro-*.tgz
+docker compose exec opencode-dev ls -la lancedb-opencode-pro-*.tgz
 
 # Confirm typecheck and build succeeded
-docker compose exec app npm run typecheck
-docker compose exec app npm run build
+docker compose exec opencode-dev npm run typecheck
+docker compose exec opencode-dev npm run build
 
 # Check resolved default storage path
-docker compose exec app node -e "import('./dist/index.js').then(() => console.log('plugin loaded'))"
-docker compose exec app sh -lc 'ls -la ~/.opencode/memory/lancedb 2>/dev/null || echo "No data yet (expected before first use)"'
+docker compose exec opencode-dev node -e "import('./dist/index.js').then(() => console.log('plugin loaded'))"
+docker compose exec opencode-dev sh -lc 'ls -la ~/.opencode/memory/lancedb 2>/dev/null || echo "No data yet (expected before first use)"'
 ```
 
 ## Long Memory Verification
@@ -785,14 +785,14 @@ docker compose build --no-cache && docker compose up -d
 The E2E script loads `dist/index.js`, so build artifacts must exist first.
 
 ```bash
-docker compose exec app npm install
-docker compose exec app npm run build
+docker compose exec opencode-dev npm install
+docker compose exec opencode-dev npm run build
 ```
 
 ### 3. Run the built-in end-to-end memory test
 
 ```bash
-docker compose exec app npm run test:e2e
+docker compose exec opencode-dev npm run test:e2e
 ```
 
 Expected success output:
@@ -814,7 +814,7 @@ This verifies all of the following in one run:
 The E2E script uses `/tmp/opencode-memory-e2e` as its test database path.
 
 ```bash
-docker compose exec app ls -la /tmp/opencode-memory-e2e
+docker compose exec opencode-dev ls -la /tmp/opencode-memory-e2e
 ```
 
 If files appear in that directory after the E2E run, memory was written to disk instead of only being kept in process memory.
@@ -830,7 +830,7 @@ When running through the normal plugin config, the default durable storage path 
 Check it inside the container with:
 
 ```bash
-docker compose exec app sh -lc 'ls -la ~/.opencode/memory/lancedb'
+docker compose exec opencode-dev sh -lc 'ls -la ~/.opencode/memory/lancedb'
 ```
 
 ### 6. Stronger proof: verify retrieval still works after restart
@@ -839,8 +839,8 @@ Long memory is only convincing if retrieval still works after the runtime is res
 
 ```bash
 docker compose restart app
-docker compose exec app npm run test:e2e
-docker compose exec app ls -la /tmp/opencode-memory-e2e
+docker compose exec opencode-dev npm run test:e2e
+docker compose exec opencode-dev ls -la /tmp/opencode-memory-e2e
 ```
 
 If the search step still succeeds after restart and the database files remain present, that is strong evidence that the memory is durable.
@@ -849,7 +849,7 @@ If the search step still succeeds after restart and the database files remain pr
 
 Treat the feature as verified only when all of these are true:
 
-- `docker compose exec app npm run test:e2e` passes
+- `docker compose exec opencode-dev npm run test:e2e` passes
 - `/tmp/opencode-memory-e2e` contains LanceDB files after the run
 - the memory retrieval step still succeeds after container restart
 - the configured OpenCode storage path exists when running real plugin integration

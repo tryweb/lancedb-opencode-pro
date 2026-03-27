@@ -238,6 +238,10 @@ export function createEffectivenessSummary(overrides: Partial<EffectivenessSumma
       falsePositiveRate: 0,
       falseNegativeRate: 0,
     },
+    duplicates: {
+      flaggedCount: 0,
+      consolidatedCount: 0,
+    },
     ...overrides,
   };
 }

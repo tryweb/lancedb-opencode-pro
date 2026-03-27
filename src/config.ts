@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "@opencode-ai/sdk";
-import type { EmbeddingProvider, InjectionMode, SummarizationMode, CodeTruncationMode, MemoryRuntimeConfig, RetrievalMode } from "./types.js";
+import type { DedupConfig, EmbeddingProvider, InjectionMode, SummarizationMode, CodeTruncationMode, MemoryRuntimeConfig, RetrievalMode } from "./types.js";
 import { clamp, expandHomePath, parseJsonObject, toBoolean, toNumber } from "./utils.js";
 
 const DEFAULT_DB_PATH = "~/.opencode/memory/lancedb";
@@ -67,6 +67,8 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
 
   const injection = resolveInjectionConfig(raw, process.env);
 
+  const dedup = resolveDedupConfig(raw, process.env);
+
   const resolvedConfig: MemoryRuntimeConfig = {
     provider,
     dbPath,
@@ -91,6 +93,7 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       importanceWeight,
     },
     injection,
+    dedup,
     includeGlobalScope: toBoolean(process.env.LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE ?? raw.includeGlobalScope, true),
     globalDetectionThreshold: Math.max(
       1,
@@ -140,6 +143,25 @@ function resolveSummarizationMode(raw: unknown): SummarizationMode {
 function resolveCodeTruncationMode(raw: unknown): CodeTruncationMode {
   if (raw === "smart" || raw === "signature" || raw === "preserve") return raw;
   return "smart";
+}
+
+function resolveDedupConfig(
+  raw: Record<string, unknown>,
+  env: NodeJS.ProcessEnv,
+): DedupConfig {
+  const dedupRaw = (raw.dedup ?? {}) as Record<string, unknown>;
+  const enabled = toBoolean(env.LANCEDB_OPENCODE_PRO_DEDUP_ENABLED ?? dedupRaw.enabled, true);
+  const writeThreshold = clamp(
+    toNumber(env.LANCEDB_OPENCODE_PRO_DEDUP_WRITE_THRESHOLD ?? dedupRaw.writeThreshold, 0.92),
+    0.0,
+    1.0,
+  );
+  const consolidateThreshold = clamp(
+    toNumber(env.LANCEDB_OPENCODE_PRO_DEDUP_CONSOLIDATE_THRESHOLD ?? dedupRaw.consolidateThreshold, 0.95),
+    0.0,
+    1.0,
+  );
+  return { enabled, writeThreshold, consolidateThreshold };
 }
 
 function resolveInjectionConfig(
@@ -242,6 +264,10 @@ function mergeMemoryConfig(
         ...(((base.injection ?? {}) as Record<string, unknown>).codeSummarization ?? {}) as Record<string, unknown>,
         ...(((override.injection ?? {}) as Record<string, unknown>).codeSummarization ?? {}) as Record<string, unknown>,
       },
+    },
+    dedup: {
+      ...((base.dedup ?? {}) as Record<string, unknown>),
+      ...((override.dedup ?? {}) as Record<string, unknown>),
     },
   };
 }

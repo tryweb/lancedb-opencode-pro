@@ -5,3 +5,9 @@ dist-test/
 npm-debug.log*
 .env
 *.tgz
+
+.opencode/
+!.opencode/config.json
+
+# Agent guidelines (local development instructions for AI agents)
+AGENT.md

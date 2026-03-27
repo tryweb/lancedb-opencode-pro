@@ -35,6 +35,18 @@ interface ScopeCache {
   norms: Map<string, number>;
 }
 
+// Exported for use by consolidateDuplicates
+export function storeFastCosine(a: number[], b: number[], normA: number, normB: number): number {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
+  const denom = normA * normB;
+  if (denom === 0) return 0;
+  let dot = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+  }
+  return dot / denom;
+}
+
 export class MemoryStore {
   private lancedb: LanceModule | null = null;
   private connection: LanceConnection | null = null;
@@ -269,12 +281,100 @@ export class MemoryStore {
   async pruneScope(scope: string, maxEntries: number): Promise<number> {
     const rows = await this.list(scope, 100000);
     if (rows.length <= maxEntries) return 0;
-    const toDelete = rows.slice(maxEntries);
+
+    const flagged = rows.filter((r) => {
+      const meta = parseMetadata(r.metadataJson);
+      return meta.isPotentialDuplicate === true;
+    });
+    const unflagged = rows.filter((r) => {
+      const meta = parseMetadata(r.metadataJson);
+      return meta.isPotentialDuplicate !== true;
+    });
+
+    const sortedFlagged = flagged.sort((a, b) => a.timestamp - b.timestamp);
+    const sortedUnflagged = unflagged.sort((a, b) => a.timestamp - b.timestamp);
+
+    const toDeleteCount = rows.length - maxEntries;
+    const deleteFromFlagged = Math.min(sortedFlagged.length, toDeleteCount);
+    const toDelete = [
+      ...sortedFlagged.slice(0, deleteFromFlagged),
+      ...sortedUnflagged.slice(0, toDeleteCount - deleteFromFlagged),
+    ];
+
     for (const row of toDelete) {
       await this.requireTable().delete(`id = '${escapeSql(row.id)}'`);
     }
     this.invalidateScope(scope);
     return toDelete.length;
+  }
+
+  async consolidateDuplicates(scope: string, threshold: number): Promise<{
+    mergedPairs: number;
+    updatedRecords: number;
+    skippedRecords: number;
+  }> {
+    const rows = await this.readByScopesIncludingMerged([scope]);
+    if (rows.length === 0) {
+      return { mergedPairs: 0, updatedRecords: 0, skippedRecords: 0 };
+    }
+
+    let mergedPairs = 0;
+    let updatedRecords = 0;
+    let skippedRecords = 0;
+    const now = Date.now();
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+    const rowsWithNorms = rows.map((row) => ({
+      row,
+      norm: this.scopeCache.get(scope)?.norms.get(row.id) ?? vecNorm(row.vector),
+    }));
+
+    for (let i = 0; i < rowsWithNorms.length; i += 1) {
+      const a = rowsWithNorms[i];
+      for (let j = i + 1; j < rowsWithNorms.length; j += 1) {
+        const b = rowsWithNorms[j];
+        const sim = storeFastCosine(a.row.vector, b.row.vector, a.norm, b.norm);
+        if (sim < threshold) continue;
+
+        const aMeta = parseMetadata(a.row.metadataJson);
+        if (aMeta.status === "merged") {
+          skippedRecords += 1;
+          continue;
+        }
+        if (a.row.lastRecalled > 0 && now - a.row.lastRecalled < FIVE_MINUTES_MS) {
+          skippedRecords += 1;
+          continue;
+        }
+
+        const older = a.row.timestamp <= b.row.timestamp ? a.row : b.row;
+        const newer = a.row.timestamp <= b.row.timestamp ? b.row : a.row;
+        const newerMeta = parseMetadata(newer.metadataJson);
+
+        const mergedIntoId = newer.id;
+        const updatedOlderMeta = { status: "merged" as const, mergedInto: mergedIntoId };
+        await this.requireTable().delete(`id = '${escapeSql(older.id)}'`);
+        await this.requireTable().add([{
+          ...older,
+          metadataJson: JSON.stringify({ ...parseMetadata(older.metadataJson), ...updatedOlderMeta }),
+        }]);
+
+        const updatedNewerMeta = { ...newerMeta, mergedFrom: older.id };
+        await this.requireTable().delete(`id = '${escapeSql(newer.id)}'`);
+        await this.requireTable().add([{
+          ...newer,
+          metadataJson: JSON.stringify(updatedNewerMeta),
+        }]);
+
+        mergedPairs += 1;
+        updatedRecords += 2;
+      }
+    }
+
+    if (mergedPairs > 0) {
+      this.invalidateScope(scope);
+    }
+
+    return { mergedPairs, updatedRecords, skippedRecords };
   }
 
   async countIncompatibleVectors(scopes: string[], expectedDim: number): Promise<number> {
@@ -348,6 +448,8 @@ export class MemoryStore {
   async summarizeEvents(scope: string, includeGlobalScope: boolean): Promise<EffectivenessSummary> {
     const scopes = includeGlobalScope && scope !== "global" ? [scope, "global"] : [scope];
     const events = await this.readEventsByScopes(scopes);
+    // Read all memories including merged for duplicate counts
+    const memories = await this.readByScopesIncludingMerged(scopes);
 
     const captureSkipReasons: Partial<Record<CaptureSkipReason, number>> = {};
     let captureConsidered = 0;
@@ -406,6 +508,16 @@ export class MemoryStore {
     const totalCaptureAttempts = captureStored + captureSkipped;
     const totalUsefulFeedback = feedbackUsefulPositive + feedbackUsefulNegative;
 
+    // Count flagged (isPotentialDuplicate) and consolidated (status=merged) from memories table
+    const flaggedCount = memories.filter((r) => {
+      const meta = parseMetadata(r.metadataJson);
+      return meta.isPotentialDuplicate === true;
+    }).length;
+    const consolidatedCount = memories.filter((r) => {
+      const meta = parseMetadata(r.metadataJson);
+      return meta.status === "merged";
+    }).length;
+
     return {
       scope,
       totalEvents: events.length,
@@ -446,6 +558,10 @@ export class MemoryStore {
         },
         falsePositiveRate: captureStored === 0 ? 0 : feedbackWrong / captureStored,
         falseNegativeRate: totalCaptureAttempts === 0 ? 0 : feedbackMissing / totalCaptureAttempts,
+      },
+      duplicates: {
+        flaggedCount,
+        consolidatedCount,
       },
     };
   }
@@ -542,13 +658,44 @@ export class MemoryStore {
       .filter((row): row is MemoryEffectivenessEvent => row !== null);
   }
 
-  private async readByScopes(scopes: string[]): Promise<MemoryRecord[]> {
+  private async readByScopesIncludingMerged(scopes: string[]): Promise<MemoryRecord[]> {
     const table = this.requireTable();
     if (scopes.length === 0) return [];
     const whereExpr = scopes.map((scope) => `scope = '${escapeSql(scope)}'`).join(" OR ");
     const rows = await table
       .query()
       .where(`(${whereExpr})`)
+      .select([
+        "id",
+        "text",
+        "vector",
+        "category",
+        "scope",
+        "importance",
+        "timestamp",
+        "lastRecalled",
+        "recallCount",
+        "projectCount",
+        "schemaVersion",
+        "embeddingModel",
+        "vectorDim",
+        "metadataJson",
+      ])
+      .limit(100000)
+      .toArray();
+
+    return rows
+      .map((row) => normalizeRow(row))
+      .filter((row): row is MemoryRecord => row !== null);
+  }
+
+  private async readByScopes(scopes: string[]): Promise<MemoryRecord[]> {
+    const table = this.requireTable();
+    if (scopes.length === 0) return [];
+    const whereExpr = scopes.map((scope) => `scope = '${escapeSql(scope)}'`).join(" OR ");
+    const rows = await table
+      .query()
+      .where(`(${whereExpr}) AND metadataJson NOT LIKE '%"status":"merged"%'`)
       .select([
         "id",
         "text",
@@ -845,4 +992,12 @@ function extractRecalledProjects(metadataJson: string): Set<string> {
     // ignore parse errors
   }
   return new Set();
+}
+
+function parseMetadata(metadataJson: string): Record<string, unknown> {
+  try {
+    return JSON.parse(metadataJson) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }

@@ -32,7 +32,9 @@ export type CaptureSkipReason =
   | "no-positive-signal"
   | "initialization-unavailable"
   | "embedding-unavailable"
-  | "empty-embedding";
+  | "empty-embedding"
+  | "duplicate-similarity"
+  | "duplicate-exact";
 
 export type FeedbackType = "missing" | "wrong" | "useful";
 
@@ -92,12 +94,19 @@ export interface SummarizationConfig {
   preserveImports: boolean;
 }
 
+export interface DedupConfig {
+  enabled: boolean;
+  writeThreshold: number;
+  consolidateThreshold: number;
+}
+
 export interface MemoryRuntimeConfig {
   provider: string;
   dbPath: string;
   embedding: EmbeddingConfig;
   retrieval: RetrievalConfig;
   injection: InjectionConfig;
+  dedup: DedupConfig;
   includeGlobalScope: boolean;
   globalDetectionThreshold: number;
   globalDiscountFactor: number;
@@ -214,5 +223,9 @@ export interface EffectivenessSummary {
     };
     falsePositiveRate: number;
     falseNegativeRate: number;
+  };
+  duplicates: {
+    flaggedCount: number;
+    consolidatedCount: number;
   };
 }
