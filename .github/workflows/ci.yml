@@ -66,31 +66,12 @@ jobs:
           sarif_file: 'semgrep.sarif'
           category: 'sast-semgrep'
 
-  verify:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: ubuntu-latest
-    env:
-      COMPOSE_FILE: docker-compose.ci.yml
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Build and start containers
-        run: docker compose build --no-cache && docker compose up -d
-
-      - name: Run verify
-        run: docker compose exec -T app npm run verify
-
-      - name: Tear down
-        if: always()
-        run: docker compose down -v --remove-orphans
-
   verify-matrix:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['20', '22']
+        node-version: ['20', '22', '24']
     runs-on: ubuntu-latest
     env:
       COMPOSE_FILE: docker-compose.ci.yml
