@@ -726,3 +726,66 @@ test("consolidateDuplicates does not merge records with very low cosine similari
     await cleanupDbPath(dbPath);
   }
 });
+
+test("consolidateDuplicates skips self-merge when older.id === newer.id (issue #25)", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:self-merge-test";
+    const testId = "ebb542a9-dfd2-4d77-aab8-cbecbe2e8998";
+    const now = Date.now();
+    
+    await store.put(createTestRecord({
+      id: testId,
+      scope,
+      text: "test content",
+      vector: createVector(384, 0.5),
+      timestamp: now,
+      lastRecalled: 0,
+      metadataJson: JSON.stringify({})
+    }));
+    
+    const result = await store.consolidateDuplicates(scope, 0.95);
+    
+    assert.equal(result.mergedPairs, 0, "should not merge self");
+    assert.equal(result.updatedRecords, 0, "should not update any records");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("consolidateDuplicates merges two similar records correctly after self-merge fix", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:merge-test";
+    const now = Date.now();
+    const sharedText = "This is a test content for duplicate detection";
+    const vec = createVector(384, 0.5);
+    
+    await store.put(createTestRecord({
+      id: "record-old",
+      scope,
+      text: sharedText,
+      vector: vec,
+      timestamp: now - 10_000,
+      lastRecalled: 0,
+      metadataJson: JSON.stringify({})
+    }));
+    
+    await store.put(createTestRecord({
+      id: "record-new",
+      scope,
+      text: sharedText,
+      vector: vec,
+      timestamp: now,
+      lastRecalled: 0,
+      metadataJson: JSON.stringify({})
+    }));
+    
+    const result = await store.consolidateDuplicates(scope, 0.95);
+    
+    assert.equal(result.mergedPairs, 1, "should merge one pair");
+    assert.equal(result.updatedRecords, 2, "should update both records");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
