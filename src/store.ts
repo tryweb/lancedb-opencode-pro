@@ -348,6 +348,12 @@ export class MemoryStore {
 
         const older = a.row.timestamp <= b.row.timestamp ? a.row : b.row;
         const newer = a.row.timestamp <= b.row.timestamp ? b.row : a.row;
+
+        // Skip self-merge: when timestamps are equal, both could reference the same record
+        if (older.id === newer.id) {
+          continue;
+        }
+
         const newerMeta = parseMetadata(newer.metadataJson);
 
         const mergedIntoId = newer.id;
