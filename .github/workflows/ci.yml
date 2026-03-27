@@ -3,6 +3,9 @@ name: CI
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   pull_request:
   push:
@@ -14,7 +17,7 @@ on:
     - cron: "0 2 * * 1"
 
 jobs:
-  sca-trivy:
+  sca-grype:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
@@ -22,27 +25,26 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Run Grype vulnerability scanner
+        uses: anchore/scan-action@v7
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          path: '.'
+          output-format: 'sarif'
+          output-file: 'grype-results.sarif'
+          severity-cutoff: 'high'
+          fail-build: true
 
-      - name: Upload Trivy results to GitHub Security tab
+      - name: Upload Grype results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'sca-trivy'
+          sarif_file: 'grype-results.sarif'
+          category: 'sca-grype'
 
   sast-semgrep:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -54,7 +56,7 @@ jobs:
       image: returntocorp/semgrep:1.76.0
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Semgrep SAST scan
         run: semgrep scan --sarif --config p/security-audit --config p/owasp-top-ten --config p/cwe-top-25 --output semgrep.sarif
@@ -66,37 +68,18 @@ jobs:
           sarif_file: 'semgrep.sarif'
           category: 'sast-semgrep'
 
-  verify:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: ubuntu-latest
-    env:
-      COMPOSE_FILE: docker-compose.ci.yml
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build and start containers
-        run: docker compose build --no-cache && docker compose up -d
-
-      - name: Run verify
-        run: docker compose exec -T app npm run verify
-
-      - name: Tear down
-        if: always()
-        run: docker compose down -v --remove-orphans
-
   verify-matrix:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['20', '22']
+        node-version: ['20', '22', '24']
     runs-on: ubuntu-latest
     env:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Docker image with Node ${{ matrix.node-version }}
         run: |
@@ -117,7 +100,7 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build and start containers
         run: docker compose build --no-cache && docker compose up -d
@@ -138,7 +121,7 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build and start containers
         run: docker compose build --no-cache && docker compose up -d
