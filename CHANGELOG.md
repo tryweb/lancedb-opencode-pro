@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.6] - 2026-03-27
+
+### Fixed
+
+- Self-merge bug in `consolidateDuplicates`: prevent `mergedFrom` from pointing to own ID when records have identical timestamps (issue #25).
+
+---
+
 ## [0.2.5] - 2026-03-27
 
 ### Added
