@@ -22,7 +22,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: npm ci
@@ -54,7 +54,7 @@ jobs:
       image: returntocorp/semgrep:1.76.0
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Semgrep SAST scan
         run: semgrep scan --sarif --config p/security-audit --config p/owasp-top-ten --config p/cwe-top-25 --output semgrep.sarif
@@ -73,7 +73,7 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build and start containers
         run: docker compose build --no-cache && docker compose up -d
@@ -96,7 +96,7 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Docker image with Node ${{ matrix.node-version }}
         run: |
@@ -117,7 +117,7 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build and start containers
         run: docker compose build --no-cache && docker compose up -d
@@ -138,7 +138,7 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build and start containers
         run: docker compose build --no-cache && docker compose up -d
