@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.8] - 2026-03-28
+
+### Fixed
+
+- Re-publish to include actual code changes (v0.2.7 was published without new features).
+
+---
+
 ## [0.2.7] - 2026-03-28
 
 ### Added

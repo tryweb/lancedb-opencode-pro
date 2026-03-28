@@ -69,6 +69,22 @@ git push origin release/vX.Y.Z
 
 ## Phase 4 — PR to Main
 
+### PRE-MERGE CHECK (CRITICAL)
+
+Before merging the PR, verify that ALL intended changes are in the release branch:
+
+```bash
+# On release branch, verify code changes exist
+git log main..release/vX.Y.Z --oneline
+git diff main..release/vX.Y.Z --stat
+```
+
+**If diff is empty or missing files:**
+- Your code changes are NOT committed
+- Stop and commit your changes before proceeding
+
+### Merge Steps
+
 ```bash
 gh pr create \
   --title "chore: release vX.Y.Z" \
@@ -84,9 +100,32 @@ gh pr merge <PR_NUMBER> --squash --delete-branch
 git checkout main && git pull origin main
 ```
 
+### IMPORTANT: Never use git stash during release
+
+**Why**: Stashing before rebase can cause code changes to be lost:
+1. `git stash` hides uncommitted changes
+2. `git rebase` may skip commits already on remote
+3. `git stash pop` restores working directory but changes are uncommitted
+
+**If you have uncommitted changes**: Commit them before any rebase operations.
+
+**If you must rebase**: Use `git reset --hard` to discard local changes first, OR commit them before rebasing.
+
 ---
 
 ## Phase 5 — Tag and Trigger CI Release
+
+### VERIFY CODE IS COMMITTED (CRITICAL)
+
+Before tagging, confirm all changes are committed:
+
+```bash
+# Check that tag will include all intended changes
+git log vX.Y.Z-1..HEAD --oneline
+
+# If this shows unexpected commits or is empty, STOP
+# Your release is missing code!
+```
 
 ```bash
 git tag vX.Y.Z <commit-sha>
@@ -123,6 +162,48 @@ gh release view vX.Y.Z --repo tryweb/lancedb-opencode-pro
 ```
 
 Both must succeed before declaring the release complete.
+
+---
+
+## Phase 6.5 — Release Correctness Verification (CRITICAL)
+
+After tagging, verify the release contains all intended changes:
+
+```bash
+# Compare with previous version tag
+git log vX.Y.Z-1..vX.Y.Z --oneline
+
+# Check file changes are included
+git diff vX.Y.Z-1..vX.Y.Z --stat | head -20
+```
+
+**Expected output**: Should show your src/, test/, openspec/ changes
+
+**If output is empty or wrong**:
+- Code changes were NOT included in the release
+- Follow "CI failed, tag already pushed" troubleshooting below
+
+### Emergency Fix
+
+If release is missing code:
+
+```bash
+# 1. Create fix branch with all changes
+git checkout -b fix/release-fix
+git add src/ test/ openspec/
+git commit -m "fix: include code changes in vX.Y.Z"
+
+# 2. Push and create PR
+git push origin fix/release-fix -u
+gh pr create --title "fix: include code in vX.Y.Z" --base main
+
+# 3. After merge, delete old tag and retag
+git checkout main && git pull
+git tag -d vX.Y.Z
+git push origin :refs/tags/vX.Y.Z
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
 
 ---
 
