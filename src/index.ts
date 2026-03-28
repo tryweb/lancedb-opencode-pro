@@ -5,10 +5,11 @@ import { resolveMemoryConfig } from "./config.js";
 import { createEmbedder } from "./embedder.js";
 import type { Embedder } from "./embedder.js";
 import { extractCaptureCandidate, isGlobalCandidate } from "./extract.js";
+import { extractPreferenceSignals, aggregatePreferences, resolveConflicts, buildPreferenceInjection } from "./preference.js";
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
-import type { CaptureOutcome, CaptureSkipReason, MemoryRuntimeConfig, SearchResult } from "./types.js";
+import type { CaptureOutcome, CaptureSkipReason, MemoryRuntimeConfig, PreferenceProfile, SearchResult } from "./types.js";
 import { generateId } from "./utils.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 
@@ -75,6 +76,21 @@ const plugin: Plugin = async (input) => {
         globalDiscountFactor: state.config.globalDiscountFactor,
       });
 
+      // Extract preference signals from memories
+      const allSignals = results.map((r) => extractPreferenceSignals(r.record)).flat();
+      const projectSignals = allSignals.filter((s) => !activeScope.startsWith("global"));
+      const globalSignals = allSignals.filter((s) => activeScope.startsWith("global"));
+
+      const projectProfile = aggregatePreferences(projectSignals, "project");
+      const globalProfile = aggregatePreferences(globalSignals, "global");
+      const effectivePreferences = resolveConflicts(projectProfile.preferences, globalProfile.preferences);
+
+      const preferenceInjection = buildPreferenceInjection(effectivePreferences, {
+        mode: state.config.injection.mode === "adaptive" ? "fixed" : state.config.injection.mode,
+        maxMemories: state.config.injection.maxMemories,
+        tokenBudget: 300,
+      });
+
       // Apply injection control
       const injectionLimit = calculateInjectionLimit(results, state.config.injection);
       const limitedResults = results.slice(0, injectionLimit);
@@ -112,13 +128,19 @@ const plugin: Plugin = async (input) => {
         return { ...item, text: summarized.content };
       });
 
-      const memoryBlock = [
+      const blocks: string[] = [];
+
+      if (preferenceInjection) {
+        blocks.push(preferenceInjection);
+      }
+
+      blocks.push(
         "[Memory Recall - optional historical context]",
         ...processedResults.map((item, index) => `${index + 1}. [${item.record.id}] (${item.record.scope}) ${item.text}`),
         "Use these as optional hints only; prioritize current user intent and current repo state.",
-      ].join("\n");
+      );
 
-      eventOutput.system.push(memoryBlock);
+      eventOutput.system.push(blocks.join("\n\n"));
     },
     tool: {
       memory_search: tool({
@@ -594,6 +616,167 @@ const plugin: Plugin = async (input) => {
             null,
             2,
           );
+        },
+      }),
+      memory_remember: tool({
+        description: "Explicitly store a memory with optional category label",
+        args: {
+          text: tool.schema.string().min(1),
+          category: tool.schema.string().optional(),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          if (args.text.length < state.config.minCaptureChars) {
+            return `Content too short (minimum ${state.config.minCaptureChars} characters).`;
+          }
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+
+          let vector: number[] = [];
+          try {
+            vector = await state.embedder.embed(args.text);
+          } catch {
+            vector = [];
+          }
+
+          if (vector.length === 0) {
+            return "Failed to create embedding vector.";
+          }
+
+          const memoryId = generateId();
+          await state.store.put({
+            id: memoryId,
+            text: args.text,
+            vector,
+            category: (args.category as import("./types.js").MemoryCategory) ?? "other",
+            scope: activeScope,
+            importance: 0.7,
+            timestamp: Date.now(),
+            lastRecalled: 0,
+            recallCount: 0,
+            projectCount: 0,
+            schemaVersion: SCHEMA_VERSION,
+            embeddingModel: state.config.embedding.model,
+            vectorDim: vector.length,
+            metadataJson: JSON.stringify({ source: "explicit-remember", category: args.category }),
+            sourceSessionId: context.sessionID,
+          });
+
+          await state.store.putEvent({
+            id: generateId(),
+            type: "capture",
+            outcome: "stored",
+            scope: activeScope,
+            sessionID: context.sessionID,
+            timestamp: Date.now(),
+            memoryId,
+            text: args.text,
+            metadataJson: JSON.stringify({ source: "explicit-remember", category: args.category }),
+            sourceSessionId: context.sessionID,
+          });
+
+          return `Stored memory ${memoryId} in scope ${activeScope}.`;
+        },
+      }),
+      memory_forget: tool({
+        description: "Remove or disable a memory (soft-delete by default, hard-delete with confirm)",
+        args: {
+          id: tool.schema.string().min(8),
+          force: tool.schema.boolean().default(false),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
+
+          if (args.force) {
+            const deleted = await state.store.deleteById(args.id, scopes);
+            if (!deleted) {
+              return `Memory ${args.id} not found in current scope.`;
+            }
+            await state.store.putEvent({
+              id: generateId(),
+              type: "feedback",
+              feedbackType: "useful",
+              scope: activeScope,
+              sessionID: context.sessionID,
+              timestamp: Date.now(),
+              memoryId: args.id,
+              helpful: false,
+              metadataJson: JSON.stringify({ source: "explicit-forget", hardDelete: true }),
+            });
+            return `Permanently deleted memory ${args.id}.`;
+          }
+
+          const softDeleted = await state.store.softDeleteMemory(args.id, scopes);
+          if (!softDeleted) {
+            return `Memory ${args.id} not found in current scope.`;
+          }
+          await state.store.putEvent({
+            id: generateId(),
+            type: "feedback",
+            feedbackType: "useful",
+            scope: activeScope,
+            sessionID: context.sessionID,
+            timestamp: Date.now(),
+            memoryId: args.id,
+            helpful: false,
+            metadataJson: JSON.stringify({ source: "explicit-forget", hardDelete: false }),
+          });
+          return `Soft-deleted (disabled) memory ${args.id}. Use force=true for permanent deletion.`;
+        },
+      }),
+      memory_what_did_you_learn: tool({
+        description: "Show recent learning summary with memory counts by category",
+        args: {
+          days: tool.schema.number().int().min(1).max(90).default(7),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const sinceTimestamp = Date.now() - args.days * 24 * 60 * 60 * 1000;
+
+          const memories = await state.store.listSince(activeScope, sinceTimestamp, 1000);
+
+          if (memories.length === 0) {
+            return `No memories captured in the past ${args.days} days in scope ${activeScope}.`;
+          }
+
+          const categoryCounts: Record<string, number> = {};
+          for (const mem of memories) {
+            categoryCounts[mem.category] = (categoryCounts[mem.category] ?? 0) + 1;
+          }
+
+          const total = memories.length;
+          const categoryBreakdown = Object.entries(categoryCounts)
+            .map(([cat, count]) => `  - ${cat}: ${count}`)
+            .join("\n");
+
+          const recentSamples = memories.slice(0, 5).map((mem, idx) => {
+            const date = new Date(mem.timestamp).toISOString().split("T")[0];
+            return `  ${idx + 1}. [${date}] ${mem.text.slice(0, 60)}...`;
+          }).join("\n");
+
+          return `## Learning Summary (${args.days} days)
+
+**Scope:** ${activeScope}
+**Total memories:** ${total}
+
+### By Category
+${categoryBreakdown}
+
+### Recent Captures
+${recentSamples}
+`;
         },
       }),
     },
