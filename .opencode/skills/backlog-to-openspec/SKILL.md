@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires openspec CLI.
 metadata:
   author: tryweb
-  version: "1.0"
+  version: "1.1"
   generatedBy: "manual"
 ---
 
@@ -77,6 +77,37 @@ openspec status --change "<kebab-case-change-id>" --json
 ```
 
 If a related archived change already exists, reuse patterns but do not copy stale assumptions.
+
+---
+
+## Phase 2.5 — Create Feature Branch (CRITICAL)
+
+**Goal**: Keep code and specs together in the same branch for atomic commits.
+
+After creating the OpenSpec change, immediately create a feature branch:
+
+```bash
+# Use the same change ID for consistency
+CHANGE_ID="<kebab-case-change-id>"
+
+# Create and push feature branch
+git checkout -b "feat/${CHANGE_ID}"
+git push origin "feat/${CHANGE_ID}" -u
+```
+
+**Why this matters**:
+- Code and OpenSpec artifacts stay together in the same branch
+- Enables atomic commits (code + specs in one commit)
+- Aligns with `release-workflow` which expects feature work on branches
+
+**Branch naming convention**:
+- Features: `feat/<change-id>`
+- Fixes: `fix/<change-id>`
+- Chores: `chore/<change-id>`
+
+**If working tree is dirty**:
+- Stash or commit current changes first
+- Never mix unrelated work in the same branch
 
 ---
 
@@ -213,15 +244,19 @@ rg "BL-" docs/backlog.md
 # 2) create change
 openspec new change "<change-id>"
 
-# 3) inspect artifact state
+# 3) create feature branch (IMPORTANT: do this before coding!)
+git checkout -b "feat/<change-id>"
+git push origin "feat/<change-id>" -u
+
+# 4) inspect artifact state
 openspec status --change "<change-id>" --json
 
-# 4) inspect artifact instructions
+# 5) inspect artifact instructions
 openspec instructions proposal --change "<change-id>" --json
 openspec instructions design --change "<change-id>" --json
 openspec instructions tasks --change "<change-id>" --json
 
-# 5) final readiness check
+# 6) final readiness check
 openspec status --change "<change-id>"
 ```
 
@@ -235,4 +270,5 @@ This skill is complete for a backlog item only when:
 2. Runtime surface and entrypoint are explicit
 3. Verification matrix includes required unit/integration/e2e
 4. Changelog wording class is defined (`internal-only` / `user-facing`)
-5. Change is ready for `/opsx-apply` implementation
+5. Feature branch is created and pushed (`feat/<change-id>`)
+6. Change is ready for `/opsx-apply` implementation
