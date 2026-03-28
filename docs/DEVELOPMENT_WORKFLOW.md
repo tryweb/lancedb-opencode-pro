@@ -240,8 +240,42 @@ The skill will guide you through:
 4. **Version & Changelog** — Update `package.json` and `CHANGELOG.md`
 5. **Release Branch** — Create `release/vX.Y.Z` branch
 6. **PR to Main** — Create PR with pre-merge checks
-7. **Tag and Trigger CI** — Push tag to trigger npm publish
-8. **Post-Release Verification** — Confirm npm + GitHub Release
+7. **Branch Cleanup Verification** — Ensure remote `release/vX.Y.Z` branch is deleted/pruned
+8. **Tag and Trigger CI** — Push tag to trigger npm publish
+9. **Post-Release Verification** — Confirm npm + GitHub Release
+
+### Important: Squash merge topology is expected
+
+The release workflow uses `--squash` for clean `main` history. This can make commit history look "diverged"
+because original commits on `release/vX.Y.Z` are not direct ancestors of `main`.
+
+Use content diff (not commit shape) as the safety check:
+
+```bash
+git diff --stat main..release/vX.Y.Z
+```
+
+- Empty (or only expected metadata differences): usually safe
+- Non-empty in `src/`, `test/`, `openspec/`: investigate before release completion
+
+### Divergence recovery quick rule: reset vs rebase
+
+- Sync local `main` to remote authority (most common):
+
+```bash
+git fetch origin && git reset --hard origin/main
+```
+
+- Keep local, unpushed commits and replay on latest `main`:
+
+```bash
+git pull --rebase origin main
+```
+
+Release safety rules:
+- Never rebase with uncommitted changes
+- Never use stash as release transport
+- If uncertain, reset local `main` to `origin/main` and restart from clean release branch
 
 ---
 
@@ -331,8 +365,10 @@ If you're unsure, ask: "Does this need a specification document?" If no → use 
 ### "Working tree is dirty"
 
 Either:
-1. Stash changes: `git stash`
-2. Commit changes: `git add . && git commit`
+1. Commit changes: `git add . && git commit`
+2. Or discard local changes intentionally: `git reset --hard`
+
+For release flow specifically, do **not** use `git stash` as a transport mechanism before rebase.
 
 ### "Branch protection prevents push"
 
