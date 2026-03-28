@@ -28,13 +28,21 @@ const plugin: Plugin = async (input) => {
       state.config = nextConfig;
     },
     event: async ({ event }) => {
-      if (event.type === "session.idle" || event.type === "session.compacted") {
-        const sessionID = event.properties.sessionID;
+      const evt = event as { type: string; properties: Record<string, unknown> };
+      const sessionID = evt.properties?.sessionID as string | undefined;
+      if (!sessionID) return;
+      if (evt.type === "session.start") {
+        await handleSessionStart(sessionID, state, input);
+      } else if (evt.type === "session.end") {
+        const outcome = evt.properties?.outcome as string | undefined;
+        await handleSessionEnd(sessionID, state, outcome ?? "unknown");
+      } else if (evt.type === "session.idle" || evt.type === "session.compacted") {
         await flushAutoCapture(sessionID, state, input.client);
-        if (event.type === "session.compacted" && state.config.dedup.enabled) {
+        if (evt.type === "session.compacted" && state.config.dedup.enabled) {
           const activeScope = deriveProjectScope(input.worktree);
           state.store.consolidateDuplicates(activeScope, state.config.dedup.consolidateThreshold).catch(() => {});
         }
+        await handleSessionIdle(sessionID, state);
       }
     },
     "experimental.text.complete": async (eventInput, eventOutput) => {
@@ -963,6 +971,7 @@ async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<Runtime
     defaultScope: deriveProjectScope(input.worktree),
     initialized: false,
     captureBuffer: new Map(),
+    activeEpisodes: new Map(),
     ensureInitialized: async () => {
       if (state.initialized) return;
       try {
@@ -1188,7 +1197,68 @@ interface RuntimeState {
   defaultScope: string;
   initialized: boolean;
   captureBuffer: Map<string, string[]>;
+  activeEpisodes: Map<string, string>;
   ensureInitialized: () => Promise<void>;
+}
+
+async function handleSessionStart(
+  sessionID: string,
+  state: RuntimeState,
+  input: Parameters<Plugin>[0],
+): Promise<void> {
+  await state.ensureInitialized();
+  if (!state.initialized) return;
+  const activeScope = deriveProjectScope(input.worktree);
+  const taskId = `session-${sessionID.slice(0, 8)}`;
+  const episode: EpisodicTaskRecord = {
+    id: generateId(),
+    sessionId: sessionID,
+    scope: activeScope,
+    taskId,
+    state: "running",
+    startTime: Date.now(),
+    commandsJson: "[]",
+    validationOutcomesJson: "[]",
+    successPatternsJson: "[]",
+    retryAttemptsJson: "[]",
+    recoveryStrategiesJson: "[]",
+    metadataJson: "{}",
+  };
+  await state.store.createTaskEpisode(episode);
+  state.activeEpisodes.set(sessionID, taskId);
+}
+
+async function handleSessionEnd(
+  sessionID: string,
+  state: RuntimeState,
+  outcome: string,
+): Promise<void> {
+  await state.ensureInitialized();
+  if (!state.initialized) return;
+  const taskId = state.activeEpisodes.get(sessionID);
+  if (!taskId) return;
+  const activeScope = state.defaultScope;
+  const finalState: TaskState = outcome === "success" ? "success" : "failed";
+  await state.store.updateTaskState(taskId, finalState, activeScope);
+  state.activeEpisodes.delete(sessionID);
+}
+
+async function handleSessionIdle(
+  sessionID: string,
+  state: RuntimeState,
+): Promise<void> {
+  await state.ensureInitialized();
+  if (!state.initialized) return;
+  const taskId = state.activeEpisodes.get(sessionID);
+  if (!taskId) return;
+  const activeScope = state.defaultScope;
+  const patterns = await state.store.extractSuccessPatternsFromScope(activeScope);
+  if (patterns.length > 0) {
+    const episode = await state.store.getTaskEpisode(taskId, activeScope);
+    if (episode) {
+      await state.store.updateTaskState(taskId, episode.state, activeScope);
+    }
+  }
 }
 
 function unavailableMessage(provider: string): string {

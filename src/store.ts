@@ -680,6 +680,11 @@ export class MemoryStore {
 
     try {
       this.episodicTaskTable = await this.connection!.openTable(EPISODIC_TABLE_NAME);
+      const schema = await this.episodicTaskTable.schema();
+      const fieldNames = schema.fields.map((f) => f.name);
+      if (!fieldNames.includes("taskDescriptionVector")) {
+        await this.episodicTaskTable.addColumns([{ name: "taskDescriptionVector", valueSql: "NULL" }]);
+      }
     } catch {
       const bootstrap: EpisodicTaskRecord = {
         id: "__bootstrap__",
@@ -695,9 +700,11 @@ export class MemoryStore {
         retryAttemptsJson: "[]",
         recoveryStrategiesJson: "[]",
         metadataJson: "{}",
+        taskDescriptionVector: undefined,
       };
       this.episodicTaskTable = await this.connection!.createTable(EPISODIC_TABLE_NAME, [bootstrap]);
       await this.episodicTaskTable.delete("id = '__bootstrap__'");
+      await this.episodicTaskTable.addColumns([{ name: "taskDescriptionVector", valueSql: "NULL" }]);
     }
   }
 

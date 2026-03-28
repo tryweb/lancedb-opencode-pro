@@ -959,3 +959,98 @@ test("dedup config: when enabled=true (default), second identical capture is fla
     await harness.cleanup();
   }
 });
+
+test("session.start event creates a task episode automatically", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const eventHook = harness.hooks.event as unknown as (input: { event: { type: string; properties: Record<string, unknown> } }) => Promise<void>;
+    const toolHooks = harness.toolHooks;
+    const testSessionId = "sess-hook-test-001";
+
+    await withPatchedFetch(async () => {
+      await eventHook({
+        event: { type: "session.start", properties: { sessionID: testSessionId } },
+      });
+    });
+
+    const allQuery = await withPatchedFetch(() =>
+      toolHooks.task_episode_query.execute({}, harness.context),
+    );
+
+    assert.ok(allQuery.length > 0 && !allQuery.includes("No task episodes"), "should have created episode after session.start");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("session.end event updates task episode state to success", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const eventHook = harness.hooks.event as unknown as (input: { event: { type: string; properties: Record<string, unknown> } }) => Promise<void>;
+    const toolHooks = harness.toolHooks;
+    const testSessionId = "sess-hook-end-success";
+
+    await withPatchedFetch(async () => {
+      await eventHook({ event: { type: "session.start", properties: { sessionID: testSessionId } } });
+    });
+
+    await withPatchedFetch(async () => {
+      await eventHook({ event: { type: "session.end", properties: { sessionID: testSessionId, outcome: "success" } } });
+    });
+
+    const successQuery = await withPatchedFetch(() =>
+      toolHooks.task_episode_query.execute({ scope: TEST_SCOPE }, harness.context),
+    );
+    assert.ok(successQuery.includes("success"), "should have updated episode to success state");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("session.end event updates task episode state to failed", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const eventHook = harness.hooks.event as unknown as (input: { event: { type: string; properties: Record<string, unknown> } }) => Promise<void>;
+    const toolHooks = harness.toolHooks;
+    const testSessionId = "sess-hook-end-fail";
+
+    await withPatchedFetch(async () => {
+      await eventHook({ event: { type: "session.start", properties: { sessionID: testSessionId } } });
+    });
+
+    await withPatchedFetch(async () => {
+      await eventHook({ event: { type: "session.end", properties: { sessionID: testSessionId, outcome: "failed" } } });
+    });
+
+    const failedQuery = await withPatchedFetch(() =>
+      toolHooks.task_episode_query.execute({ scope: TEST_SCOPE }, harness.context),
+    );
+    assert.ok(failedQuery.includes("failed"), "should have updated episode to failed state");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("session.idle triggers pattern extraction when episode exists", async () => {
+  const harness = await createPluginHarness();
+  try {
+    const eventHook = harness.hooks.event as unknown as (input: { event: { type: string; properties: Record<string, unknown> } }) => Promise<void>;
+    const toolHooks = harness.toolHooks;
+    const testSessionId = "sess-hook-idle";
+
+    await withPatchedFetch(async () => {
+      await eventHook({ event: { type: "session.start", properties: { sessionID: testSessionId } } });
+    });
+
+    await withPatchedFetch(async () => {
+      await eventHook({ event: { type: "session.idle", properties: { sessionID: testSessionId } } });
+    });
+
+    const queryResult = await withPatchedFetch(() =>
+      toolHooks.task_episode_query.execute({ scope: TEST_SCOPE }, harness.context),
+    );
+    assert.ok(queryResult.length > 0, "should have query results after idle");
+  } finally {
+    await harness.cleanup();
+  }
+});

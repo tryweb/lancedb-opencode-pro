@@ -259,18 +259,29 @@ Supported environment variables:
 - Project-scope memory isolation (`project:*` + optional `global`).
 - Cross-project memory sharing via global scope with automatic detection.
 - Memory tools:
-  - `memory_search`
-  - `memory_delete`
-  - `memory_clear`
-  - `memory_stats`
-  - `memory_feedback_missing`
-  - `memory_feedback_wrong`
-  - `memory_feedback_useful`
-  - `memory_effectiveness`
-  - `memory_scope_promote`
-  - `memory_scope_demote`
-  - `memory_global_list`
-  - `memory_port_plan`
+  - `memory_search` - Search long-term memory using hybrid retrieval
+  - `memory_delete` - Delete a specific memory entry
+  - `memory_clear` - Clear all memories in a scope
+  - `memory_stats` - Show memory statistics for a scope
+  - `memory_remember` - Explicitly store a memory
+  - `memory_forget` - Remove or disable a memory
+  - `memory_what_did_you_learn` - Show recent learning summary
+  - `memory_feedback_missing` - Report missed information
+  - `memory_feedback_wrong` - Report incorrect memory
+  - `memory_feedback_useful` - Report recall usefulness
+  - `memory_effectiveness` - Show effectiveness metrics
+  - `memory_scope_promote` - Promote memory to global scope
+  - `memory_scope_demote` - Demote memory to project scope
+  - `memory_global_list` - List global-scoped memories
+  - `memory_consolidate` - Merge duplicate memories
+  - `memory_consolidate_all` - Cross-scope consolidation
+  - `memory_port_plan` - Plan non-conflicting port assignments
+- Episodic Learning tools:
+  - `task_episode_create` - Create a task episode record
+  - `task_episode_query` - Query task episodes by scope/state
+  - `similar_task_recall` - Find similar past tasks using semantic search
+  - `retry_budget_suggest` - Suggest retry budgets based on history
+  - `recovery_strategy_suggest` - Suggest recovery strategies after failures
 
 ## Memory Effectiveness Feedback
 
