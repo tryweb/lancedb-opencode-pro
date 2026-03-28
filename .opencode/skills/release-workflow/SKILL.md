@@ -1,10 +1,11 @@
 ---
 name: release-workflow
-description: Standard release procedure for lancedb-opencode-pro. Use when publishing a new npm version. Covers version bump, local verification, branch/PR flow, tagging, CI gate, and npm publish confirmation.
+description: Hardened release workflow for lancedb-opencode-pro. Use when publishing a new npm version and when you must prevent claim/code/spec drift.
 license: MIT
+compatibility: Requires git, gh, docker compose, and npm CLI.
 metadata:
   author: tryweb
-  version: "1.0"
+  version: "2.0"
   generatedBy: "manual"
 ---
 
@@ -12,14 +13,27 @@ metadata:
 
 Use this skill when the user wants to publish a new version to npm.
 
+This version adds mandatory anti-drift gates so we do not repeat:
+- changelog claim without shipped code
+- implemented store APIs without runtime operability
+- spec requirement without test evidence
+
 ---
 
 ## Pre-Conditions (Check Before Starting)
 
 - All intended feature changes are merged to `main`
-- `npm whoami` returns the publishing account (run on host, not in Docker)
+- Working tree is clean (`git status --short` is empty)
+- `npm whoami` returns the publishing account (run on host)
 - `NPM_TOKEN` secret is set in GitHub Actions repository settings
 - No open `fix/` branches with uncommitted work
+
+```bash
+git status --short
+npm whoami
+```
+
+If working tree is dirty: stop and clean up before release.
 
 ---
 
@@ -28,27 +42,73 @@ Use this skill when the user wants to publish a new version to npm.
 **Goal**: Confirm the current codebase builds and passes all tests before touching version numbers.
 
 ```bash
-# Run the full release gate inside Docker
 docker compose build --no-cache && docker compose up -d
-docker compose exec app npm run verify:full
+docker compose exec opencode-dev npm run release:check
 ```
 
 Gate passes when:
 - typecheck exits 0
 - build exits 0
-- foundation 10/10, regression 18/18, retrieval 2/2
+- effectiveness/retrieval/benchmark all pass
 - benchmark latency within thresholds
 - `npm pack` produces a `.tgz` with no errors
+- `npm publish --dry-run` succeeds
 
 If the gate fails, **stop and fix root causes** before proceeding. Never bump the version on a failing codebase.
 
 ---
 
-## Phase 2 — Version & Changelog
+## Phase 2 — Claim-to-Evidence Gate (CRITICAL)
+
+**Goal**: every changelog claim must map to shipped evidence.
+
+For each planned changelog bullet, prepare evidence triplet:
+1. Spec reference (requirement/scenario path)
+2. Code reference (commit + file path)
+3. Verification reference (unit/integration/e2e)
+
+Use this checklist format while drafting release note bullets:
+
+```text
+[ ] Claim text
+    - Spec: openspec/changes/.../specs/.../spec.md#Requirement: ...
+    - Code: <commit> <file1,file2>
+    - Tests: <test target or CI job>
+    - Surface: internal-api | opencode-tool | hook-driven
+```
+
+**Hard rule**: if a claim is user-facing (tool/hook behavior), it MUST include integration/e2e evidence.
+
+---
+
+## Phase 3 — Operability Gate (CRITICAL)
+
+**Goal**: prevent "implemented but not usable" releases.
+
+If a claim says user can use a feature:
+- verify runtime entrypoint exists (`hooks.tool` or explicit event hook path)
+- verify this entrypoint is exercised by tests
+
+Suggested checks:
 
 ```bash
-# On main, bump version in package.json
-# Edit CHANGELOG.md — add a new ## [X.Y.Z] section at the top
+# list exposed tools (example pattern)
+rg "^[[:space:]]*[a-z0-9_]+:\s*tool\(" src/index.ts
+
+# ensure claimed symbol is reachable from runtime wiring
+rg "<claimed_method_or_feature_keyword>" src/index.ts src/**/*.ts test/**/*.ts
+```
+
+If feature is internal-only, changelog wording must explicitly say "internal API/foundation; not exposed as tool".
+
+---
+
+## Phase 4 — Version & Changelog
+
+```bash
+# After gates pass, update version and changelog
+# package.json version
+# CHANGELOG.md: only claims with evidence
 ```
 
 Commit message format:
@@ -58,7 +118,7 @@ chore: bump version to X.Y.Z and update changelog
 
 ---
 
-## Phase 3 — Release Branch
+## Phase 5 — Release Branch
 
 ```bash
 git checkout -b release/vX.Y.Z
@@ -67,7 +127,7 @@ git push origin release/vX.Y.Z
 
 ---
 
-## Phase 4 — PR to Main
+## Phase 6 — PR to Main
 
 ### PRE-MERGE CHECK (CRITICAL)
 
@@ -82,6 +142,17 @@ git diff main..release/vX.Y.Z --stat
 **If diff is empty or missing files:**
 - Your code changes are NOT committed
 - Stop and commit your changes before proceeding
+
+### CLAIM DRIFT CHECK (CRITICAL)
+
+Before merge, re-check release note bullets against branch content:
+
+```bash
+# check that each referenced file/area actually changed
+git diff main..release/vX.Y.Z -- CHANGELOG.md src/ test/ openspec/
+```
+
+If changelog mentions a capability without matching code/tests in the PR, fix changelog or add missing implementation before merge.
 
 ### Merge Steps
 
@@ -113,15 +184,20 @@ git checkout main && git pull origin main
 
 ---
 
-## Phase 5 — Tag and Trigger CI Release
+## Phase 7 — Tag and Trigger CI Release
+
+**Tag timing rule (CRITICAL):**
+- Never tag from a commit that only bumps version/changelog while feature commit is still ahead/behind.
+- Tag must point to the already-merged commit that includes real implementation + tests.
 
 ### VERIFY CODE IS COMMITTED (CRITICAL)
 
 Before tagging, confirm all changes are committed:
 
 ```bash
-# Check that tag will include all intended changes
+# Check that tag delta contains expected implementation and tests
 git log vX.Y.Z-1..HEAD --oneline
+git diff --name-only vX.Y.Z-1..HEAD
 
 # If this shows unexpected commits or is empty, STOP
 # Your release is missing code!
@@ -151,7 +227,7 @@ gh run list --workflow=ci.yml --limit=5
 
 ---
 
-## Phase 6 — Post-Release Verification
+## Phase 8 — Post-Release Verification
 
 ```bash
 # Confirm npm version is live
@@ -165,7 +241,7 @@ Both must succeed before declaring the release complete.
 
 ---
 
-## Phase 6.5 — Release Correctness Verification (CRITICAL)
+## Phase 8.5 — Release Correctness Verification (CRITICAL)
 
 After tagging, verify the release contains all intended changes:
 
@@ -174,7 +250,7 @@ After tagging, verify the release contains all intended changes:
 git log vX.Y.Z-1..vX.Y.Z --oneline
 
 # Check file changes are included
-git diff vX.Y.Z-1..vX.Y.Z --stat | head -20
+git diff vX.Y.Z-1..vX.Y.Z --stat
 ```
 
 **Expected output**: Should show your src/, test/, openspec/ changes
@@ -246,7 +322,7 @@ Some build artifacts were created by root inside Docker:
 
 ```bash
 docker compose up -d
-docker compose exec -T -u root app sh -lc \
+docker compose exec -T -u root opencode-dev sh -lc \
   'chown -R 1000:1000 /workspace/dist /workspace/dist-test 2>/dev/null || true'
 npm publish
 ```
@@ -284,28 +360,44 @@ EOF
 ```bash
 # Phase 1 — local gate
 docker compose build --no-cache && docker compose up -d
-docker compose exec app npm run verify:full
+docker compose exec opencode-dev npm run release:check
 
-# Phase 2 — version bump
+# Phase 2-3 — evidence and operability checks
+rg "^[[:space:]]*[a-z0-9_]+:\s*tool\(" src/index.ts
+git diff --name-only main..HEAD
+
+# Phase 4 — version bump
 # Edit package.json + CHANGELOG.md, then:
 git add package.json CHANGELOG.md
 git commit -m "chore: bump version to X.Y.Z and update changelog"
 
-# Phase 3 — release branch
+# Phase 5 — release branch
 git checkout -b release/vX.Y.Z
 git push origin release/vX.Y.Z
 
-# Phase 4 — PR + merge
+# Phase 6 — PR + merge
 gh pr create --title "chore: release vX.Y.Z" --base main --head release/vX.Y.Z
 gh pr merge <PR_NUMBER> --squash --delete-branch
 git checkout main && git pull origin main
 
-# Phase 5 — tag
+# Phase 7 — tag
 git tag vX.Y.Z HEAD
 git push origin vX.Y.Z
 gh run list --workflow=ci.yml --limit=3
 
-# Phase 6 — verify
+# Phase 8 — verify
 npm view lancedb-opencode-pro version
 gh release view vX.Y.Z --repo tryweb/lancedb-opencode-pro
 ```
+
+---
+
+## Release Definition of Done (DoD)
+
+Release can be declared complete only if all are true:
+
+1. `docker compose exec opencode-dev npm run release:check` passed
+2. Every changelog bullet has spec/code/test evidence
+3. Any user-facing bullet has runtime entrypoint proof (`hooks.tool`/hook path)
+4. Tag points to merged implementation commit, not version-only commit
+5. Post-release verification confirms npm + GitHub Release
