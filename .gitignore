@@ -6,8 +6,10 @@ npm-debug.log*
 .env
 *.tgz
 
-.opencode/
+.opencode/*
 !.opencode/config.json
+!.opencode/skills/
+!.opencode/skills/**
 
 # Agent guidelines (local development instructions for AI agents)
 AGENT.md
