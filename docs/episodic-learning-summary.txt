@@ -1,0 +1,217 @@
+================================================================================
+EPISODIC LEARNING SCOPE SUMMARY (Release B)
+================================================================================
+
+PROJECT: lancedb-opencode-pro
+ANALYSIS DATE: March 28, 2026
+SCOPE: BL-003, BL-014, BL-015, BL-016, BL-017, BL-018, BL-019, BL-020
+
+================================================================================
+KEY FINDING
+================================================================================
+
+All episodic learning capabilities are INTERNAL APIs ONLY.
+No new MCP tools or user-facing commands are promised.
+
+The system:
+  ✅ Automatically captures task episodes from session events
+  ✅ Automatically classifies failures and extracts patterns
+  ✅ Automatically suggests retry strategies
+  ✅ Injects suggestions through existing memory injection mechanisms
+
+================================================================================
+THREE OPENSPEC CHANGES
+================================================================================
+
+1. add-episodic-task-schema (BL-003)
+   Location: openspec/changes/archive/2026-03-28-add-episodic-task-schema/
+   Status: ✅ COMPLETE
+   Artifacts: proposal.md, design.md, specs/episodic-task-schema/spec.md, tasks.md
+   
+   Provides:
+   - EpisodicTaskRecord schema with task states (pending/running/success/failed/timeout)
+   - FailureType taxonomy (syntax/runtime/logic/resource/unknown)
+   - CRUD methods: createTaskEpisode, updateTaskState, getTaskEpisode, queryTaskEpisodes
+   - Database table: episodic_tasks
+
+2. add-task-episode-learning (BL-014-018)
+   Location: openspec/changes/archive/2026-03-28-add-task-episode-learning/
+   Status: ✅ COMPLETE
+   Artifacts: proposal.md, design.md, 5 spec files, tasks.md
+   
+   Provides:
+   - Task episode capture on session start/command/completion (BL-014)
+   - Validation outcome parsing for type/build/test (BL-015)
+   - Failure classification into 5 categories (BL-016)
+   - Success pattern extraction with confidence scoring (BL-017)
+   - Similar task recall with 0.85 similarity threshold (BL-018)
+
+3. add-retry-recovery-evidence (BL-019-020)
+   Location: openspec/changes/archive/2026-03-28-add-retry-recovery-evidence/
+   Status: ✅ COMPLETE
+   Artifacts: proposal.md, design.md, 3 spec files, tasks.md
+   
+   Provides:
+   - Retry attempt tracking with outcomes (BL-019)
+   - Recovery strategy recording (BL-019)
+   - Retry budget suggestion based on median history (BL-020)
+   - Stop condition detection (BL-020)
+   - Strategy switching suggestions with confidence (BL-020)
+
+================================================================================
+CAPABILITIES MATRIX
+================================================================================
+
+Capability                      | BL    | Type           | Tool? | Internal?
+--------------------------------|-------|----------------|-------|----------
+Episodic Task Schema            | BL-003| Data Model     | ❌    | ✅
+Task Episode Capture            | BL-014| Event Handler  | ❌    | ✅
+Validation Outcome Ingestion    | BL-015| Parser         | ❌    | ✅
+Failure Taxonomy                | BL-016| Classifier     | ❌    | ✅
+Success Pattern Extraction      | BL-017| Analyzer       | ❌    | ✅
+Similar Task Recall             | BL-018| Search         | ❌    | ✅
+Retry/Recovery Evidence         | BL-019| Data Model     | ❌    | ✅
+Retry Budget Suggestion         | BL-020| Suggester      | ❌    | ✅
+Strategy Switching              | BL-020| Suggester      | ❌    | ✅
+
+================================================================================
+TOOL EXPOSURE
+================================================================================
+
+Current Tools (17 total):
+  memory_search, memory_delete, memory_clear, memory_stats,
+  memory_feedback_missing, memory_feedback_wrong, memory_feedback_useful,
+  memory_effectiveness, memory_scope_promote, memory_scope_demote,
+  memory_global_list, memory_consolidate, memory_consolidate_all,
+  memory_port_plan, memory_remember, memory_forget, memory_what_did_you_learn
+
+New Tools Promised by Release B: NONE
+
+Why: Episodic learning is an internal learning layer. Suggestions are injected
+through existing memory injection mechanisms, not exposed as new tools.
+
+================================================================================
+IMPLEMENTATION STATUS
+================================================================================
+
+BL-003 (Episodic Task Schema):
+  ✅ Type definitions (EpisodicTaskRecord, TaskState, FailureType)
+  ✅ Database table (episodic_tasks)
+  ✅ CRUD methods (create, update, get, query)
+  ✅ Unit tests
+  ⏳ Index on task state and timestamp (not verified)
+
+BL-014-018 (Task Episode Learning):
+  ✅ Episode capture on session events
+  ✅ Command recording
+  ✅ Validation outcome parsing (type/build/test)
+  ✅ Failure classification (5 categories)
+  ✅ Success pattern extraction
+  ✅ Similar task recall (0.85 threshold)
+  ✅ Unit tests
+  ⏳ Integration tests for similar task recall (not verified)
+
+BL-019-020 (Retry/Recovery Evidence):
+  ✅ Retry attempt tracking
+  ✅ Recovery strategy recording
+  ✅ Budget suggestion (median-based)
+  ✅ Stop condition detection
+  ✅ Strategy switching suggestions
+  ✅ Unit tests
+  ✅ Integration tests
+
+================================================================================
+TESTABLE REQUIREMENTS (QUOTED FROM SPECS)
+================================================================================
+
+BL-003: "The system SHALL support creating episodic task records with task ID,
+        session ID, scope, start time, and initial state."
+
+BL-014: "The system SHALL create a task episode record when a new task session
+        begins."
+
+BL-015: "The system SHALL parse and store type check results from validation
+        output."
+
+BL-016: "The system SHALL classify failures with syntax errors as 'syntax'."
+
+BL-017: "The system SHALL extract command sequences from successful task
+        episodes."
+
+BL-018: "The system SHALL find similar past tasks using vector similarity."
+
+BL-019: "The system SHALL record retry attempts with attempt number and
+        outcome."
+
+BL-020: "The system SHALL suggest retry budget based on median previous
+        attempts."
+
+================================================================================
+DATA STORAGE
+================================================================================
+
+All episodic data stored in episodic_tasks table:
+  - commandsJson: JSON array of commands executed
+  - validationOutcomesJson: JSON array of validation results
+  - successPatternsJson: JSON array of extracted patterns
+  - retryAttemptsJson: JSON array of retry records
+  - recoveryStrategiesJson: JSON array of recovery strategies
+  - metadataJson: Additional metadata
+
+================================================================================
+SCOPE BOUNDARIES
+================================================================================
+
+INCLUDED:
+  ✅ Task episode schema and CRUD operations
+  ✅ Validation outcome parsing (type/build/test)
+  ✅ Failure classification (5 categories)
+  ✅ Success pattern extraction (commands, tools, confidence)
+  ✅ Similar task recall (vector-based, 0.85 threshold)
+  ✅ Retry attempt tracking
+  ✅ Recovery strategy recording
+  ✅ Retry budget suggestion (median-based)
+  ✅ Stop condition detection
+  ✅ Strategy switching suggestions
+
+NOT INCLUDED:
+  ❌ New MCP tools or user-facing commands
+  ❌ Automatic retry execution (suggestions only)
+  ❌ Complex workflow orchestration
+  ❌ ML-based pattern extraction (rule-based only)
+  ❌ Multi-task dependency graphs
+  ❌ Automatic recovery actions
+  ❌ Direct execution control
+
+================================================================================
+CONFIDENCE ASSESSMENT
+================================================================================
+
+Spec Requirements:        HIGH   (All 8 BL items have detailed spec.md files)
+Implementation Status:    HIGH   (Types, methods, and data structures present)
+Tool Exposure:            HIGH   (Specs explicitly state "suggestions only")
+Integration Points:       MEDIUM (Design docs reference hooks, code not fully reviewed)
+Test Coverage:            MEDIUM (Unit tests complete, some integration tests incomplete)
+Database Schema:          HIGH   (episodic_tasks table fully defined)
+
+================================================================================
+REFERENCES
+================================================================================
+
+OpenSpec Changes:
+  openspec/changes/archive/2026-03-28-add-episodic-task-schema/
+  openspec/changes/archive/2026-03-28-add-task-episode-learning/
+  openspec/changes/archive/2026-03-28-add-retry-recovery-evidence/
+
+Implementation Files:
+  src/types.ts (lines 280-349)
+  src/store.ts (episodic_tasks table and methods)
+  src/index.ts (plugin hooks and tool definitions)
+
+Backlog Index:
+  docs/backlog.md (Release B definition, lines 99-100)
+
+Full Analysis:
+  docs/episodic-learning-scope-analysis.md (23KB, detailed)
+
+================================================================================

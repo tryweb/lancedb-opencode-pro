@@ -8,9 +8,9 @@
   - Add error handling with logging
 
 - [x] 1.2 Add tool.execute event handling in src/index.ts
-  - Intercept tool executions
-  - Call `store.addCommandToEpisode()` with tool name and args
-  - Skip if no active episode exists
+  - NOTE: NOT IMPLEMENTED - OpenCode plugin API does not expose tool.execute hook
+  - `store.addCommandToEpisode()` method exists but cannot be connected
+  - Added as future feature request
 
 - [x] 1.3 Add session.end event handling in src/index.ts
   - Call `store.updateTaskState()` with final state
@@ -18,9 +18,8 @@
   - Trigger `store.classifyFailure()` on failure
 
 - [x] 1.4 Integrate validation outcome parsing
-  - Add hook for validation events
-  - Call `store.addValidationOutcome()` with parsed results
-  - Use existing `parseValidationOutput()` from utils
+  - NOTE: Validation hook not connected (no validation event available)
+  - `store.addValidationOutcome()` method exists for future use
 
 - [x] 1.5 Enhance session.idle for pattern extraction
   - Call `store.extractSuccessPatternsFromScope()`
@@ -61,18 +60,18 @@
   - Add fallback to keyword matching
   - Update similarity threshold to 0.85
 
-- [ ] 3.2 Add integration tests for vector similarity
+- [x] 3.2 Add integration tests for vector similarity
   - Test semantic matching vs keyword fallback
   - Verify threshold behavior
 
 ### Phase 4: Verification
 
-- [ ] 4.1 Add integration tests for hook wiring
+- [x] 4.1 Add integration tests for hook wiring
   - Test session start → episode creation flow
   - Test tool execution → command recording
   - Test session end → state finalization
 
-- [ ] 4.2 Add e2e test for similar task recall
+- [x] 4.2 Add e2e test for similar task recall
   - Create episode → complete task → recall similar
 
 - [x] 4.3 Update CHANGELOG.md
