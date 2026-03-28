@@ -67,8 +67,8 @@
 
 | BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
 |---|---|---|---|---|---|---|
-| BL-023 | Citation model | P0 | planned | TBD | TBD | 記憶來源可追溯 |
-| BL-024 | Citation validation pipeline | P1 | planned | TBD | TBD | 引用有效性檢查 |
+| BL-023 | Citation model | P0 | done | citation-model | openspec/changes/citation-model/specs/ | 記憶來源可追溯 |
+| BL-024 | Citation validation pipeline | P1 | done | citation-model | openspec/changes/citation-model/specs/ | 引用有效性檢查 |
 | BL-025 | Freshness / decay engine | P1 | done | memory-retrieval-ranking-phase1 | openspec/specs/memory-retrieval-ranking/ | recency boost 已實裝 |
 | BL-026 | Conflict detection | P1 | done | 2026-03-28-add-preference-learning | openspec/specs/preference-learning/ | 偏好衝突解決已實裝 |
 
@@ -99,7 +99,7 @@ BL-001, BL-002, BL-005, BL-006, BL-008, BL-010, BL-011, BL-012
 ### Release B（經驗學習閉環）— ✅ DONE
 BL-003, BL-014, BL-015, BL-016, BL-017, BL-018, BL-019, BL-020
 
-### Release C（治理與產品化）— IN PROGRESS
+### Release C（治理與產品化）— ✅ DONE
 BL-021, BL-022, BL-023, BL-024, BL-025, BL-026, BL-027, BL-028, BL-029, BL-030, BL-031, BL-034, BL-035
 
 ---

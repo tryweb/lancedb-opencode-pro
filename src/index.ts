@@ -144,7 +144,12 @@ const plugin: Plugin = async (input) => {
 
       blocks.push(
         "[Memory Recall - optional historical context]",
-        ...processedResults.map((item, index) => `${index + 1}. [${item.record.id}] (${item.record.scope}) ${item.text}`),
+        ...processedResults.map((item, index) => {
+          const citationInfo = item.record.citationSource
+            ? ` [${item.record.citationSource}|${item.record.citationStatus ?? "pending"}]`
+            : "";
+          return `${index + 1}. [${item.record.id}]${citationInfo} (${item.record.scope}) ${item.text}`;
+        }),
         "Use these as optional hints only; prioritize current user intent and current repo state.",
       );
 
@@ -231,7 +236,10 @@ const plugin: Plugin = async (input) => {
               const percent = Math.round(item.score * 100);
               const meta = JSON.parse(item.record.metadataJson || "{}");
               const duplicateMarker = meta.isPotentialDuplicate ? " (duplicate)" : "";
-              return `${idx + 1}. [${item.record.id}]${duplicateMarker} (${item.record.scope}) ${item.record.text} [${percent}%]`;
+              const citationInfo = item.record.citationSource
+                ? ` [${item.record.citationSource}|${item.record.citationStatus ?? "pending"}]`
+                : "";
+              return `${idx + 1}. [${item.record.id}]${duplicateMarker}${citationInfo} (${item.record.scope}) ${item.record.text} [${percent}%]`;
             })
             .join("\n");
         },
@@ -677,6 +685,7 @@ const plugin: Plugin = async (input) => {
           }
 
           const memoryId = generateId();
+          const now = Date.now();
           await state.store.put({
             id: memoryId,
             text: args.text,
@@ -684,7 +693,7 @@ const plugin: Plugin = async (input) => {
             category: (args.category as import("./types.js").MemoryCategory) ?? "other",
             scope: activeScope,
             importance: 0.7,
-            timestamp: Date.now(),
+            timestamp: now,
             lastRecalled: 0,
             recallCount: 0,
             projectCount: 0,
@@ -693,6 +702,9 @@ const plugin: Plugin = async (input) => {
             vectorDim: vector.length,
             metadataJson: JSON.stringify({ source: "explicit-remember", category: args.category }),
             sourceSessionId: context.sessionID,
+            citationSource: "explicit-remember",
+            citationTimestamp: now,
+            citationStatus: "pending",
           });
 
           await state.store.putEvent({
@@ -760,6 +772,68 @@ const plugin: Plugin = async (input) => {
             metadataJson: JSON.stringify({ source: "explicit-forget", hardDelete: false }),
           });
           return `Soft-deleted (disabled) memory ${args.id}. Use force=true for permanent deletion.`;
+        },
+      }),
+      memory_citation: tool({
+        description: "View or update citation information for a memory",
+        args: {
+          id: tool.schema.string().min(8),
+          status: tool.schema.string().optional(),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
+
+          const citation = await state.store.getCitation(args.id, scopes);
+          if (!citation) {
+            return `Memory ${args.id} not found or has no citation information.`;
+          }
+
+          if (args.status) {
+            const validStatuses = ["verified", "pending", "invalid", "expired"];
+            if (!validStatuses.includes(args.status)) {
+              return `Invalid status. Must be one of: ${validStatuses.join(", ")}`;
+            }
+            const updated = await state.store.updateCitation(args.id, scopes, { status: args.status as import("./types.js").CitationStatus });
+            if (!updated) {
+              return `Failed to update citation for ${args.id}.`;
+            }
+            return `Updated citation status for ${args.id} to ${args.status}.`;
+          }
+
+          return JSON.stringify({
+            memoryId: args.id,
+            source: citation.source,
+            timestamp: new Date(citation.timestamp).toISOString(),
+            status: citation.status,
+            chain: citation.chain,
+          }, null, 2);
+        },
+      }),
+      memory_validate_citation: tool({
+        description: "Validate a citation for a memory and update its status",
+        args: {
+          id: tool.schema.string().min(8),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
+
+          const result = await state.store.validateCitation(args.id, scopes);
+          return JSON.stringify({
+            memoryId: args.id,
+            valid: result.valid,
+            status: result.status,
+            reason: result.reason,
+          }, null, 2);
         },
       }),
       memory_what_did_you_learn: tool({
@@ -1104,6 +1178,7 @@ async function getLastUserText(
   }
 
   const memoryId = generateId();
+  const now = Date.now();
 
   await state.store.put({
     id: memoryId,
@@ -1112,7 +1187,7 @@ async function getLastUserText(
     category: result.candidate.category,
     scope: activeScope,
     importance: result.candidate.importance,
-    timestamp: Date.now(),
+    timestamp: now,
     lastRecalled: 0,
     recallCount: 0,
     projectCount: 0,
@@ -1125,6 +1200,9 @@ async function getLastUserText(
       isPotentialDuplicate,
       duplicateOf,
     }),
+    citationSource: "auto-capture",
+    citationTimestamp: now,
+    citationStatus: "pending",
   });
 
   await recordCaptureEvent(state, {

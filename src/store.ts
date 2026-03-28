@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { CaptureSkipReason, EffectivenessSummary, EpisodicTaskRecord, MemoryEffectivenessEvent, MemoryRecord, RecallSource, SearchResult, SuccessPattern, TaskState, ValidationOutcome } from "./types.js";
+import type { CaptureSkipReason, CitationSource, CitationStatus, EffectivenessSummary, EpisodicTaskRecord, MemoryEffectivenessEvent, MemoryRecord, RecallSource, SearchResult, SuccessPattern, TaskState, ValidationOutcome } from "./types.js";
 import { generateId } from "./utils.js";
 import { cosineSimilarity, tokenize } from "./utils.js";
 
@@ -95,6 +95,10 @@ export class MemoryStore {
         tags: undefined,
         status: "active",
         parentId: undefined,
+        citationSource: undefined,
+        citationTimestamp: undefined,
+        citationStatus: undefined,
+        citationChain: undefined,
       };
       this.table = await this.connection.createTable(TABLE_NAME, [bootstrap]);
       await this.table.delete("id = '__bootstrap__'");
@@ -488,6 +492,99 @@ export class MemoryStore {
     }]);
 
     this.invalidateScope(match.scope);
+  }
+
+  async getCitation(id: string, scopes: string[]): Promise<{ source: CitationSource; timestamp: number; status: CitationStatus; chain: string[] } | null> {
+    const rows = await this.readByScopes(scopes);
+    const match = rows.find((row) => this.matchesId(row.id, id));
+    if (!match) return null;
+    if (!match.citationSource) return null;
+    return {
+      source: match.citationSource,
+      timestamp: match.citationTimestamp ?? match.timestamp,
+      status: match.citationStatus ?? "pending",
+      chain: match.citationChain ?? [],
+    };
+  }
+
+  async updateCitation(
+    id: string,
+    scopes: string[],
+    updates: {
+      status?: CitationStatus;
+      chain?: string[];
+    },
+  ): Promise<boolean> {
+    const rows = await this.readByScopes(scopes);
+    const match = rows.find((row) => this.matchesId(row.id, id));
+    if (!match) return false;
+
+    const existingChain = match.citationChain ?? [];
+    const currentMeta = parseMetadata(match.metadataJson);
+    const newMeta = {
+      ...currentMeta,
+      citationStatus: updates.status,
+      citationVerifiedAt: updates.status === "verified" ? Date.now() : currentMeta.citationVerifiedAt,
+    };
+
+    await this.requireTable().delete(`id = '${escapeSql(match.id)}'`);
+    this.invalidateScope(match.scope);
+
+    await this.requireTable().add([{
+      ...match,
+      citationStatus: updates.status ?? match.citationStatus,
+      citationChain: updates.chain ? [...existingChain, ...updates.chain] : existingChain,
+      metadataJson: JSON.stringify(newMeta),
+    }]);
+
+    this.invalidateScope(match.scope);
+    return true;
+  }
+
+  async validateCitation(id: string, scopes: string[]): Promise<{ valid: boolean; status: CitationStatus; reason?: string }> {
+    const citation = await this.getCitation(id, scopes);
+    if (!citation) {
+      return { valid: false, status: "invalid", reason: "No citation found" };
+    }
+
+    if (citation.status === "verified") {
+      return { valid: true, status: "verified" };
+    }
+
+    if (citation.status === "invalid") {
+      return { valid: false, status: "invalid", reason: "Citation was marked invalid" };
+    }
+
+    if (citation.status === "pending") {
+      const ageMs = Date.now() - citation.timestamp;
+      const autoExpireMs = 7 * 24 * 60 * 60 * 1000;
+      if (ageMs > autoExpireMs) {
+        await this.updateCitation(id, scopes, { status: "expired" });
+        return { valid: false, status: "expired", reason: "Citation expired (pending too long)" };
+      }
+      return { valid: true, status: "pending" };
+    }
+
+    if (citation.status === "expired") {
+      return { valid: false, status: "expired", reason: "Citation has expired" };
+    }
+
+    return { valid: false, status: citation.status, reason: "Unknown citation status" };
+  }
+
+  async refreshExpiredCitations(scope: string, maxAgeDays: number = 7): Promise<number> {
+    const rows = await this.readByScopes([scope]);
+    let expiredCount = 0;
+    const cutoffTime = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+
+    for (const row of rows) {
+      if (row.citationStatus === "pending" && row.citationTimestamp && row.citationTimestamp < cutoffTime) {
+        const updated = await this.updateCitation(row.id, [scope], { status: "expired" });
+        if (updated) expiredCount++;
+      }
+    }
+
+    return expiredCount;
   }
 
   async listEvents(scopes: string[], limit: number): Promise<MemoryEffectivenessEvent[]> {
@@ -1113,6 +1210,10 @@ export class MemoryStore {
         "tags",
         "status",
         "parentId",
+        "citationSource",
+        "citationTimestamp",
+        "citationStatus",
+        "citationChain",
       ])
       .limit(100000)
       .toArray();
@@ -1151,6 +1252,10 @@ export class MemoryStore {
         "tags",
         "status",
         "parentId",
+        "citationSource",
+        "citationTimestamp",
+        "citationStatus",
+        "citationChain",
       ])
       .limit(100000)
       .toArray();
@@ -1221,6 +1326,18 @@ export class MemoryStore {
     }
     if (!fieldNames.has("parentId")) {
       missing.push({ name: "parentId", valueSql: "CAST(NULL AS STRING)" });
+    }
+    if (!fieldNames.has("citationSource")) {
+      missing.push({ name: "citationSource", valueSql: "CAST(NULL AS STRING)" });
+    }
+    if (!fieldNames.has("citationTimestamp")) {
+      missing.push({ name: "citationTimestamp", valueSql: "CAST(NULL AS BIGINT)" });
+    }
+    if (!fieldNames.has("citationStatus")) {
+      missing.push({ name: "citationStatus", valueSql: "CAST(NULL AS STRING)" });
+    }
+    if (!fieldNames.has("citationChain")) {
+      missing.push({ name: "citationChain", valueSql: "CAST(NULL AS STRING)" });
     }
 
     if (missing.length === 0) {
@@ -1314,6 +1431,21 @@ function normalizeRow(row: Record<string, unknown>): MemoryRecord | null {
     tags: parsedTags,
     status: (row.status as MemoryRecord["status"]) ?? "active",
     parentId: typeof row.parentId === "string" && row.parentId.length > 0 ? row.parentId : undefined,
+    citationSource: typeof row.citationSource === "string" && row.citationSource.length > 0 ? row.citationSource as CitationSource : undefined,
+    citationTimestamp: typeof row.citationTimestamp === "number" ? row.citationTimestamp : undefined,
+    citationStatus: typeof row.citationStatus === "string" && row.citationStatus.length > 0 ? row.citationStatus as CitationStatus : undefined,
+    citationChain: (() => {
+      if (!row.citationChain) return undefined;
+      if (Array.isArray(row.citationChain)) return row.citationChain as string[];
+      if (typeof row.citationChain === "string" && row.citationChain.length > 0) {
+        try {
+          return JSON.parse(row.citationChain) as string[];
+        } catch {
+          return undefined;
+        }
+      }
+      return undefined;
+    })(),
   };
 }
 
