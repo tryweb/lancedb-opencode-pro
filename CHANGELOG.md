@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.9] - 2026-03-28
+
+### Added
+
+- **Episodic Learning Tools** (Hook Wiring + Tools Exposure):
+  - `task_episode_create`: Create task episode records manually
+  - `task_episode_query`: Query episodes by scope and state
+  - `similar_task_recall`: Find similar past tasks using vector similarity
+  - `retry_budget_suggest`: Get retry budget suggestions based on history
+  - `recovery_strategy_suggest`: Get recovery strategy suggestions after failures
+
+- **Automatic Similar Task Recall**: Enhanced `session.idle` to inject similar task context into system prompt using vector similarity
+
+- **Vector Similarity Upgrade**: `findSimilarTasks()` now supports vector-based similarity search with fallback to keyword matching
+
+### Changed
+
+- Extended `EpisodicTaskRecord` to support `taskDescriptionVector` for vector-based similarity
+
+---
+
 ## [0.2.8] - 2026-03-28
 
 ### Fixed
