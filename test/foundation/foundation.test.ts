@@ -789,3 +789,111 @@ test("consolidateDuplicates merges two similar records correctly after self-merg
     await cleanupDbPath(dbPath);
   }
 });
+
+// ─────────────────────────────────────────────
+// Explicit Memory Commands Support (§3)
+// ─────────────────────────────────────────────
+test("softDeleteMemory marks record as disabled instead of deleting", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:soft-delete";
+    const now = Date.now();
+    const record = createTestRecord({
+      id: "mem-to-disable",
+      scope,
+      text: "This memory will be disabled",
+      vector: createVector(384, 0.5),
+      timestamp: now,
+      metadataJson: JSON.stringify({}),
+    });
+    await store.put(record);
+
+    const result = await store.softDeleteMemory("mem-to-disable", [scope]);
+    assert.equal(result, true, "softDelete should return true");
+
+    const listResult = await store.list(scope, 10);
+    assert.equal(listResult.length, 0, "disabled memory should not appear in list");
+
+    const searchResult = await store.search({
+      query: "disabled",
+      queryVector: createVector(384, 0.5),
+      scopes: [scope],
+      limit: 10,
+      vectorWeight: 1.0,
+      bm25Weight: 0.0,
+      minScore: 0.0,
+    });
+    assert.equal(searchResult.length, 0, "disabled memory should not appear in search");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("softDeleteMemory returns false when record not found", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const result = await store.softDeleteMemory("non-existent-id", ["project:test"]);
+    assert.equal(result, false, "should return false for non-existent record");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("listSince returns memories newer than timestamp", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:list-since";
+    const now = Date.now();
+    const oldTimestamp = now - 10 * 24 * 60 * 60 * 1000;
+    const newTimestamp = now - 2 * 24 * 60 * 60 * 1000;
+
+    await store.put(createTestRecord({
+      id: "old-memory",
+      scope,
+      text: "Old memory",
+      vector: createVector(384, 0.1),
+      timestamp: oldTimestamp,
+      metadataJson: JSON.stringify({}),
+    }));
+    await store.put(createTestRecord({
+      id: "new-memory",
+      scope,
+      text: "New memory",
+      vector: createVector(384, 0.2),
+      timestamp: newTimestamp,
+      metadataJson: JSON.stringify({}),
+    }));
+
+    const sinceTimestamp = now - 5 * 24 * 60 * 60 * 1000;
+    const result = await store.listSince(scope, sinceTimestamp, 10);
+
+    assert.equal(result.length, 1, "should return only memories newer than sinceTimestamp");
+    assert.equal(result[0].id, "new-memory", "should return the newer memory");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("listSince respects limit parameter", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const scope = "project:list-since-limit";
+    const now = Date.now();
+
+    for (let i = 0; i < 10; i++) {
+      await store.put(createTestRecord({
+        id: `mem-${i}`,
+        scope,
+        text: `Memory ${i}`,
+        vector: createVector(384, i / 10),
+        timestamp: now - i * 60 * 60 * 1000,
+        metadataJson: JSON.stringify({}),
+      }));
+    }
+
+    const result = await store.listSince(scope, 0, 3);
+    assert.equal(result.length, 3, "should respect limit");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});

@@ -42,6 +42,8 @@ export type RecallSource = "system-transform" | "manual-search";
 
 export type MemoryScope = "project" | "global";
 
+export type SchemaVersion = 1 | 2;
+
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
   model: string;
@@ -115,6 +117,8 @@ export interface MemoryRuntimeConfig {
   maxEntriesPerScope: number;
 }
 
+export type MemoryStatus = "active" | "disabled" | "merged";
+
 export interface MemoryRecord {
   id: string;
   text: string;
@@ -130,6 +134,14 @@ export interface MemoryRecord {
   embeddingModel: string;
   vectorDim: number;
   metadataJson: string;
+  // Extended fields (optional for backward compatibility)
+  userId?: string;
+  teamId?: string;
+  sourceSessionId?: string;
+  confidence?: number;
+  tags?: string[];
+  status?: MemoryStatus;
+  parentId?: string;
 }
 
 export interface SearchResult {
@@ -164,6 +176,8 @@ export interface CaptureEvent extends MemoryEffectivenessEventBase {
   type: "capture";
   outcome: CaptureOutcome;
   skipReason?: CaptureSkipReason;
+  // Extended fields (optional for backward compatibility)
+  sourceSessionId?: string;
 }
 
 export interface RecallEvent extends MemoryEffectivenessEventBase {
@@ -179,6 +193,11 @@ export interface FeedbackEvent extends MemoryEffectivenessEventBase {
   helpful?: boolean;
   labels?: string[];
   reason?: string;
+  // Extended fields (optional for backward compatibility)
+  sourceSessionId?: string;
+  confidenceDelta?: number;
+  relatedMemoryId?: string;
+  context?: Record<string, unknown>;
 }
 
 export type MemoryEffectivenessEvent = CaptureEvent | RecallEvent | FeedbackEvent;
@@ -228,4 +247,103 @@ export interface EffectivenessSummary {
     flaggedCount: number;
     consolidatedCount: number;
   };
+}
+
+export type PreferenceCategory = "language" | "tool" | "style" | "workflow" | "other";
+export type PreferenceScope = "project" | "global";
+export type PreferenceSource = "explicit" | "inferred";
+
+export interface PreferenceSignal {
+  key: string;
+  value: string;
+  category: PreferenceCategory;
+  source: PreferenceSource;
+  timestamp: number;
+  memoryId: string;
+}
+
+export interface Preference {
+  key: string;
+  value: string;
+  category: PreferenceCategory;
+  confidence: number;
+  scope: PreferenceScope;
+  lastUpdated: number;
+  sourceCount: number;
+}
+
+export interface PreferenceProfile {
+  scope: string;
+  preferences: Preference[];
+  updatedAt: number;
+}
+
+export type TaskState = "pending" | "running" | "success" | "failed" | "timeout";
+export type FailureType = "syntax" | "runtime" | "logic" | "resource" | "unknown";
+export type ValidationType = "type-check" | "build" | "test";
+export type ValidationStatus = "pass" | "fail" | "skipped";
+
+export interface ValidationOutcome {
+  type: ValidationType;
+  status: ValidationStatus;
+  timestamp: number;
+  errorCount?: number;
+  errorTypes?: string[];
+  passedCount?: number;
+  failedCount?: number;
+  output?: string;
+}
+
+export interface SuccessPattern {
+  commands: string[];
+  tools: string[];
+  confidence: number;
+  extractedAt: number;
+}
+
+export interface RetryAttempt {
+  attemptNumber: number;
+  timestamp: number;
+  outcome: "success" | "failed" | "abandoned";
+  errorMessage?: string;
+  failureType?: FailureType;
+}
+
+export interface RecoveryStrategy {
+  name: string;
+  attemptedAt: number;
+  succeeded: boolean;
+}
+
+export interface RetryBudgetSuggestion {
+  suggestedRetries: number;
+  confidence: number;
+  basedOnCount: number;
+  shouldStop: boolean;
+  stopReason?: string;
+}
+
+export interface StrategySuggestion {
+  strategy: string;
+  reason: string;
+  confidence: number;
+  basedOnTask?: string;
+}
+
+export interface EpisodicTaskRecord {
+  id: string;
+  sessionId: string;
+  scope: string;
+  taskId: string;
+  state: TaskState;
+  startTime: number;
+  endTime?: number;
+  failureType?: FailureType;
+  errorMessage?: string;
+  commandsJson: string;
+  validationOutcomesJson: string;
+  successPatternsJson: string;
+  retryAttemptsJson: string;
+  recoveryStrategiesJson: string;
+  metadataJson: string;
 }

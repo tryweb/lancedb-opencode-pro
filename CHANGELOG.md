@@ -6,6 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.2.7] - 2026-03-28
+
+### Added
+
+- **Episodic Task Schema** (BL-003): New `EpisodicTaskRecord` interface with `TaskState`, `FailureType` types for tracking task episodes.
+- **Task Episode Capture** (BL-014): Methods for creating, updating, and querying task episodes.
+- **Validation Outcome Ingestion** (BL-015): Parse type-check, build, and test validation results.
+- **Failure Taxonomy** (BL-016): `classifyFailure()` function categorizes errors as syntax, runtime, logic, resource, or unknown.
+- **Success Pattern Extraction** (BL-017): Extract command sequences and tools from successful task episodes.
+- **Similar Task Recall** (BL-018): Find similar past tasks with configurable similarity threshold (0.85).
+- **Retry/Recovery Evidence** (BL-019, BL-020): Track retry attempts and recovery strategies with budget suggestions.
+- `addCommandToEpisode()`, `addValidationOutcome()`, `addSuccessPatterns()` store methods.
+- `addRetryAttempt()`, `addRecoveryStrategy()`, `suggestRetryBudget()`, `suggestRecoveryStrategies()` store methods.
+- `parseValidationOutput()` utility for parsing validation output.
+
+### Testing
+
+- New unit tests for episodic task CRUD operations.
+- New unit tests for validation parsing and failure classification.
+
+---
+
 ## [0.2.6] - 2026-03-27
 
 ### Fixed
