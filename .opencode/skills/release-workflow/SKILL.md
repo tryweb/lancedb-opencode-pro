@@ -171,6 +171,34 @@ gh pr merge <PR_NUMBER> --squash --delete-branch
 git checkout main && git pull origin main
 ```
 
+### Why squash merge can look "diverged" (expected topology)
+
+`--squash` creates a new commit on `main`, so original commits from `release/vX.Y.Z` are not direct ancestors of `main`.
+This can look like divergence in commit history even when release content is already shipped.
+
+Use content checks (not commit shape) to decide if this is safe:
+
+```bash
+git diff --stat main..release/vX.Y.Z
+```
+
+- Empty diff (or only expected metadata differences): usually safe and already represented on `main`
+- Non-empty diff in `src/`, `test/`, or `openspec/`: investigate before proceeding
+
+### Phase 6.5 — Branch Cleanup Verification (CRITICAL)
+
+After merge, verify the release branch was actually deleted on remote.
+`--delete-branch` can fail silently (for example due to protection rules or permissions).
+
+```bash
+git fetch --prune
+if git branch -r | grep -q "origin/release/vX.Y.Z"; then
+  echo "ERROR: origin/release/vX.Y.Z still exists. Delete it before declaring release done."
+  echo "Run: git push origin --delete release/vX.Y.Z"
+  exit 1
+fi
+```
+
 ### IMPORTANT: Never use git stash during release
 
 **Why**: Stashing before rebase can cause code changes to be lost:
@@ -181,6 +209,20 @@ git checkout main && git pull origin main
 **If you have uncommitted changes**: Commit them before any rebase operations.
 
 **If you must rebase**: Use `git reset --hard` to discard local changes first, OR commit them before rebasing.
+
+### Divergence Recovery: reset vs rebase
+
+Choose by intent:
+
+| Situation | Preferred command | Why |
+|---|---|---|
+| You only want local `main` to match remote authority | `git fetch origin && git reset --hard origin/main` | Fastest and least ambiguous recovery |
+| You must keep local, unpushed commits and replay on top of latest remote | `git pull --rebase origin main` | Preserves your local work with linear history |
+
+Hard rule for release flow:
+- Never run rebase with uncommitted changes
+- Never use stash as a release transport mechanism
+- If uncertain, reset local `main` to `origin/main` and restart from a clean release branch
 
 ---
 
@@ -380,6 +422,10 @@ gh pr create --title "chore: release vX.Y.Z" --base main --head release/vX.Y.Z
 gh pr merge <PR_NUMBER> --squash --delete-branch
 git checkout main && git pull origin main
 
+# Phase 6.5 — remote branch cleanup verification
+git fetch --prune
+git branch -r | grep "origin/release/vX.Y.Z" && git push origin --delete release/vX.Y.Z
+
 # Phase 7 — tag
 git tag vX.Y.Z HEAD
 git push origin vX.Y.Z
@@ -401,3 +447,4 @@ Release can be declared complete only if all are true:
 3. Any user-facing bullet has runtime entrypoint proof (`hooks.tool`/hook path)
 4. Tag points to merged implementation commit, not version-only commit
 5. Post-release verification confirms npm + GitHub Release
+6. `origin/release/vX.Y.Z` has been deleted (or explicitly cleaned up and pruned)
