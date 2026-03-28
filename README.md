@@ -349,6 +349,8 @@ Key fields:
 - `recall.manualRescueRatio`: `manual.requested / auto.requested` — a proxy for how often users still need to search manually despite automatic recall.
 - `feedback.falsePositiveRate`: wrong-memory reports divided by stored memories.
 - `feedback.falseNegativeRate`: missing-memory reports relative to capture attempts.
+- `duplicates.flaggedCount`: number of memories flagged as potential duplicates (similarity >= writeThreshold during capture)
+- `duplicates.consolidatedCount`: number of memories merged via consolidation (similarity >= consolidateThreshold)
 
 ### Interpreting Low-Feedback Results
 
@@ -517,6 +519,53 @@ This configuration:
 3. Guarantees at least 2 memories are injected
 4. Preserves code structure when truncating
 5. Prevents injection of memories below 0.2 score threshold
+
+---
+
+## Deduplication Configuration
+
+The provider supports similarity-based deduplication to reduce storage bloat from semantically equivalent memories.
+
+### Configuration
+
+Add a `dedup` block to your sidecar config:
+
+```json
+{
+  "dedup": {
+    "enabled": true,
+    "writeThreshold": 0.92,
+    "consolidateThreshold": 0.95
+  }
+}
+```
+
+- **`enabled`**: Enable/disable deduplication (default: `true`)
+- **`writeThreshold`**: Similarity threshold for flagging new memories as potential duplicates (default: `0.92`)
+- **`consolidateThreshold`**: Similarity threshold for automatic merging during consolidation (default: `0.95`)
+
+### How It Works
+
+1. **Flagging** (write-time): When a new memory is captured, the system checks similarity against existing memories in the same scope. If similarity >= `writeThreshold`, the memory is written with `isPotentialDuplicate: true` flag.
+
+2. **Consolidation** (background): On `session.compacted` events, the system automatically merges memory pairs with similarity >= `consolidateThreshold`. Merged records are marked with `status: "merged"` and excluded from search results.
+
+### Manual Consolidation
+
+You can manually trigger consolidation:
+
+```text
+memory_consolidate scope="project:your-project" confirm=true
+memory_consolidate_all confirm=true
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LANCEDB_OPENCODE_PRO_DEDUP_ENABLED` | `true` | Enable/disable dedup |
+| `LANCEDB_OPENCODE_PRO_DEDUP_WRITE_THRESHOLD` | `0.92` | Similarity threshold for flagging |
+| `LANCEDB_OPENCODE_PRO_DEDUP_CONSOLIDATE_THRESHOLD` | `0.95` | Similarity threshold for merging |
 
 ---
 
