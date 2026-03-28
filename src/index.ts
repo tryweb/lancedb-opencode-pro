@@ -9,7 +9,7 @@ import { extractPreferenceSignals, aggregatePreferences, resolveConflicts, build
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
-import type { CaptureOutcome, CaptureSkipReason, MemoryRuntimeConfig, PreferenceProfile, SearchResult } from "./types.js";
+import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, ValidationOutcome, ValidationType } from "./types.js";
 import { generateId } from "./utils.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 
@@ -139,6 +139,28 @@ const plugin: Plugin = async (input) => {
         ...processedResults.map((item, index) => `${index + 1}. [${item.record.id}] (${item.record.scope}) ${item.text}`),
         "Use these as optional hints only; prioritize current user intent and current repo state.",
       );
+
+      // === Similar Task Recall (Episodic Learning) ===
+      try {
+        const queryVector = await state.embedder.embed(query);
+        const similarTasks = await state.store.findSimilarTasks(activeScope, query, 0.85, queryVector);
+        if (similarTasks.length > 0) {
+          const taskContext = similarTasks.slice(0, 2).map((ep) => {
+            const commands = JSON.parse(ep.commandsJson || "[]");
+            const outcomes = JSON.parse(ep.validationOutcomesJson || "[]");
+            const passed = outcomes.filter((o: ValidationOutcome) => o.status === "pass").length;
+            const total = outcomes.length;
+            return `Similar task: ${ep.taskId} (${ep.state}) - Commands: ${commands.slice(0, 3).join(" → ")} - Validations: ${passed}/${total} passed`;
+          });
+          blocks.push(
+            "[Similar Task Recall - based on past successful solutions]",
+            ...taskContext,
+            "Consider these approaches for solving the current task.",
+          );
+        }
+      } catch (error) {
+        console.warn(`[lancedb-opencode-pro] similar task recall failed: ${toErrorMessage(error)}`);
+      }
 
       eventOutput.system.push(blocks.join("\n\n"));
     },
@@ -777,6 +799,150 @@ ${categoryBreakdown}
 ### Recent Captures
 ${recentSamples}
 `;
+        },
+      }),
+      // === Episodic Learning Tools ===
+      task_episode_create: tool({
+        description: "Create a new task episode record for tracking",
+        args: {
+          taskId: tool.schema.string().min(1),
+          scope: tool.schema.string().optional(),
+          description: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const episode: EpisodicTaskRecord = {
+            id: generateId(),
+            sessionId: context.sessionID,
+            scope: activeScope,
+            taskId: args.taskId,
+            state: "pending",
+            startTime: Date.now(),
+            endTime: 0,
+            commandsJson: "[]",
+            validationOutcomesJson: "[]",
+            successPatternsJson: "[]",
+            retryAttemptsJson: "[]",
+            recoveryStrategiesJson: "[]",
+            metadataJson: JSON.stringify({ description: args.description }),
+          };
+
+          await state.store.createTaskEpisode(episode);
+          return `Created task episode ${episode.id} for task ${args.taskId} in scope ${activeScope}`;
+        },
+      }),
+      task_episode_query: tool({
+        description: "Query task episodes by scope and state",
+        args: {
+          scope: tool.schema.string().optional(),
+          state: tool.schema.string().optional(),
+          limit: tool.schema.number().int().min(1).max(100).default(10),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const stateFilter = args.state as TaskState | undefined;
+          const episodes = await state.store.queryTaskEpisodes(activeScope, stateFilter);
+
+          if (episodes.length === 0) {
+            return `No task episodes found in scope ${activeScope}`;
+          }
+
+          const limited = episodes.slice(0, args.limit);
+          return limited.map((ep) => {
+            const meta = JSON.parse(ep.metadataJson || "{}");
+            return `[${ep.id}] ${ep.taskId} - ${ep.state} (${new Date(ep.startTime).toISOString().split("T")[0]}) ${meta.description ? `- ${meta.description}` : ""}`;
+          }).join("\n");
+        },
+      }),
+      similar_task_recall: tool({
+        description: "Find similar past tasks using semantic search",
+        args: {
+          query: tool.schema.string().min(1),
+          threshold: tool.schema.number().min(0).max(1).default(0.85),
+          limit: tool.schema.number().int().min(1).max(10).default(3),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          let queryVector: number[] = [];
+          try {
+            queryVector = await state.embedder.embed(args.query);
+          } catch {
+            queryVector = [];
+          }
+          const similar = await state.store.findSimilarTasks(activeScope, args.query, args.threshold, queryVector);
+
+          if (similar.length === 0) {
+            return `No similar tasks found for "${args.query}"`;
+          }
+
+          const limited = similar.slice(0, args.limit);
+          return limited.map((ep) => {
+            const commands = JSON.parse(ep.commandsJson || "[]");
+            const outcomes = JSON.parse(ep.validationOutcomesJson || "[]");
+            return `Task: ${ep.taskId} (${ep.state})
+  Commands: ${commands.slice(0, 3).join(" → ")}
+  Validations: ${outcomes.map((o: ValidationOutcome) => `${o.type}:${o.status}`).join(", ") || "none"}
+`;
+          }).join("\n");
+        },
+      }),
+      retry_budget_suggest: tool({
+        description: "Get retry budget suggestion based on historical data",
+        args: {
+          errorType: tool.schema.string(),
+          minSamples: tool.schema.number().int().min(1).default(3),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const result = await state.store.suggestRetryBudget(activeScope, args.minSamples);
+
+          if (!result) {
+            return `Insufficient data for retry budget suggestion (need at least ${args.minSamples} failed tasks)`;
+          }
+
+          return JSON.stringify({
+            suggestedRetries: result.suggestedRetries,
+            confidence: result.confidence.toFixed(2),
+            basedOnCount: result.basedOnCount,
+            shouldStop: result.shouldStop,
+            stopReason: result.stopReason,
+          }, null, 2);
+        },
+      }),
+      recovery_strategy_suggest: tool({
+        description: "Get recovery strategy suggestions after failures",
+        args: {
+          taskId: tool.schema.string().min(1),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const strategies = await state.store.suggestRecoveryStrategies(activeScope, args.taskId);
+
+          if (strategies.length === 0) {
+            return `No recovery strategies found for task ${args.taskId}`;
+          }
+
+          return strategies.map((s) => {
+            return `- ${s.strategy}: ${s.reason} (confidence: ${s.confidence.toFixed(2)}${s.basedOnTask ? `, based on: ${s.basedOnTask}` : ""})`;
+          }).join("\n");
         },
       }),
     },

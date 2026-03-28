@@ -813,22 +813,41 @@ export class MemoryStore {
     return true;
   }
 
-  async findSimilarTasks(scope: string, taskDescription: string, minSimilarity: number = 0.85): Promise<EpisodicTaskRecord[]> {
+  async findSimilarTasks(
+    scope: string,
+    taskDescription: string,
+    minSimilarity: number = 0.85,
+    queryVector?: number[],
+  ): Promise<EpisodicTaskRecord[]> {
     await this.ensureEpisodicTaskTable(384);
     const table = this.requireEpisodicTaskTable();
-    // Simple text-based matching - can be enhanced with vector similarity later
     const rows = await table.query().where(`scope = '${escapeSql(scope)}' AND state = 'success'`).toArray();
     const episodes = rows as unknown as EpisodicTaskRecord[];
-    
-    // Simple keyword-based similarity (placeholder for vector similarity)
-    const keywords = taskDescription.toLowerCase().split(/\s+/).filter(k => k.length > 2);
-    
-    const scored = episodes.map(ep => {
+
+    // Vector similarity if query vector provided
+    if (queryVector && queryVector.length > 0) {
+      const scored = episodes
+        .filter((ep) => ep.taskDescriptionVector && ep.taskDescriptionVector.length === queryVector.length)
+        .map((ep) => {
+          const similarity = cosineSimilarity(queryVector, ep.taskDescriptionVector!);
+          return { episode: ep, similarity };
+        });
+
+      return scored
+        .filter((s) => s.similarity >= minSimilarity)
+        .sort((a, b) => b.similarity - a.similarity)
+        .map((s) => s.episode);
+    }
+
+    // Fallback to keyword-based similarity
+    const keywords = taskDescription.toLowerCase().split(/\s+/).filter((k) => k.length > 2);
+
+    const scored = episodes.map((ep) => {
       const metadata = JSON.parse(ep.metadataJson || "{}");
       const description = (metadata.description || "").toLowerCase();
       const taskId = ep.taskId.toLowerCase();
       const commands = JSON.parse(ep.commandsJson || "[]").join(" ").toLowerCase();
-      
+
       const text = `${taskId} ${description} ${commands}`;
       let matchCount = 0;
       for (const kw of keywords) {
@@ -839,9 +858,9 @@ export class MemoryStore {
     });
 
     return scored
-      .filter(s => s.similarity >= minSimilarity)
+      .filter((s) => s.similarity >= minSimilarity)
       .sort((a, b) => b.similarity - a.similarity)
-      .map(s => s.episode);
+      .map((s) => s.episode);
   }
 
   async extractSuccessPatternsFromScope(scope: string): Promise<{ pattern: SuccessPattern; count: number }[]> {

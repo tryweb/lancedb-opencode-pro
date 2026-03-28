@@ -346,4 +346,5 @@ export interface EpisodicTaskRecord {
   retryAttemptsJson: string;
   recoveryStrategiesJson: string;
   metadataJson: string;
+  taskDescriptionVector?: number[];
 }
