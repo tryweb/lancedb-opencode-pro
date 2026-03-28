@@ -119,6 +119,19 @@ export interface MemoryRuntimeConfig {
 
 export type MemoryStatus = "active" | "disabled" | "merged";
 
+export type CitationSource = "auto-capture" | "explicit-remember" | "import" | "external";
+
+export type CitationStatus = "verified" | "pending" | "invalid" | "expired";
+
+export interface CitationRecord {
+  source: CitationSource;
+  timestamp: number;
+  status: CitationStatus;
+  chain: string[];
+  verifiedAt?: number;
+  expiresAt?: number;
+}
+
 export interface MemoryRecord {
   id: string;
   text: string;
@@ -142,6 +155,11 @@ export interface MemoryRecord {
   tags?: string[];
   status?: MemoryStatus;
   parentId?: string;
+  // Citation fields
+  citationSource?: CitationSource;
+  citationTimestamp?: number;
+  citationStatus?: CitationStatus;
+  citationChain?: string[];
 }
 
 export interface SearchResult {

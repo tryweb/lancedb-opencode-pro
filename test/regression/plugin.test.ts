@@ -254,7 +254,7 @@ test("auto-capture stores qualifying output with decision category and skips sho
       harness.toolHooks.memory_search.execute({ query: "Postgres migration design", limit: 5 }, harness.context),
     );
 
-    assert.match(searchOutput, /^1\. \[[^\]]+\] \([^)]*\) /m);
+    assert.match(searchOutput, /^1\. \[[^\]]+\] \[[^\]]+\] \([^)]*\) /m);
     assert.match(searchOutput, /Postgres/);
 
     const statsOutput = await withPatchedFetch(() => harness.toolHooks.memory_stats.execute({}, harness.context));
@@ -275,7 +275,7 @@ test("memory_search returns ranked entries with stable identifiers and readable 
 
     const lines = searchOutput.split("\n");
     assert.ok(lines.length >= 1);
-    assert.match(lines[0], /^1\. \[[^\]]+\] \([^)]*\) .+ \[\d+%\]$/);
+    assert.match(lines[0], /^1\. \[[^\]]+\] \[[^\]]+\] \([^)]*\) .+ \[\d+%\]$/);
     assert.match(searchOutput, /proxy_buffer_size|Nginx 502/);
   } finally {
     await harness.cleanup();
@@ -293,7 +293,7 @@ test("openai provider path captures and recalls memory with the same tool surfac
       harness.toolHooks.memory_search.execute({ query: "rotate token upstream cache 401", limit: 5 }, harness.context),
     );
 
-    assert.match(searchOutput, /^1\. \[[^\]]+\] \([^)]*\) /m);
+    assert.match(searchOutput, /^1\. \[[^\]]+\] \[[^\]]+\] \([^)]*\) /m);
     assert.match(searchOutput, /rotate token|upstream cache|401/);
   } finally {
     await harness.cleanup();

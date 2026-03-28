@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Citation Model** (citation-model):
+  - `CitationSource` type: `auto-capture`, `explicit-remember`, `import`, `external`
+  - `CitationStatus` type: `verified`, `pending`, `invalid`, `expired`
+  - Citation fields on `MemoryRecord`: `citationSource`, `citationTimestamp`, `citationStatus`, `citationChain`
+  - `memory_citation` tool: View and update citation information for memories
+  - `memory_validate_citation` tool: Validate citation status and update if expired
+  - Citation info displayed in search results: `[source|status]` suffix
+  - `validateCitation()` and `refreshExpiredCitations()` methods for citation validation
+  - Auto-capture and memory_remember now set citation source automatically
+
+---
+
 ## [0.3.0] - 2026-03-28
 
 ### Added

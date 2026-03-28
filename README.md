@@ -276,6 +276,8 @@ Supported environment variables:
   - `memory_consolidate` - Merge duplicate memories
   - `memory_consolidate_all` - Cross-scope consolidation
   - `memory_port_plan` - Plan non-conflicting port assignments
+  - `memory_citation` - View/update citation information
+  - `memory_validate_citation` - Validate citation status
 - Episodic Learning tools:
   - `task_episode_create` - Create a task episode record
   - `task_episode_query` - Query task episodes by scope/state
@@ -530,6 +532,55 @@ This configuration:
 3. Guarantees at least 2 memories are injected
 4. Preserves code structure when truncating
 5. Prevents injection of memories below 0.2 score threshold
+
+---
+
+## Citation Model
+
+The provider tracks memory provenance through citation metadata, allowing verification of memory sources and freshness.
+
+### Citation Sources
+
+Memories can have one of the following citation sources:
+- **`auto-capture`**: Memory captured automatically from assistant responses
+- **`explicit-remember`**: Memory stored via `memory_remember` tool
+- **`import`**: Memory imported from external source (future)
+- **`external`**: Memory from external source (future)
+
+### Citation Status
+
+Each citation has a status indicating its verification state:
+- **`pending`**: Initial state, citation not yet verified
+- **`verified`**: Citation has been verified as valid
+- **`invalid`**: Citation has been marked invalid
+- **`expired`**: Citation has expired (pending too long without verification)
+
+### Citation in Search Results
+
+Search results include citation information in the format `[source|status]`:
+
+```
+1. [abc123] (project:my-project) Memory text here [85%]
+```
+
+With citation:
+```
+1. [abc123][auto-capture|verified] (project:my-project) Memory text here [85%]
+```
+
+### Citation Tools
+
+- **`memory_citation`**: View or update citation information for a memory
+  - View: `memory_citation id="abc123"`
+  - Update: `memory_citation id="abc123" status="verified"`
+
+- **`memory_validate_citation`**: Validate a citation and update its status
+  - Automatically marks old pending citations as expired
+  - Returns validation result with status and reason
+
+### Citation Chain
+
+Citations support a chain field to track derived memories. When a memory is derived from another memory, the source memory ID is added to the chain.
 
 ---
 

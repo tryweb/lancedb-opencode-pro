@@ -102,6 +102,10 @@ export function createTestRecord(overrides: Partial<MemoryRecord> = {}): MemoryR
     embeddingModel: overrides.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
     vectorDim: overrides.vectorDim ?? vector.length,
     metadataJson: overrides.metadataJson ?? "{}",
+    citationSource: overrides.citationSource,
+    citationTimestamp: overrides.citationTimestamp,
+    citationStatus: overrides.citationStatus,
+    citationChain: overrides.citationChain,
   };
 }
 
