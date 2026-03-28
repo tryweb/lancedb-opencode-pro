@@ -6,6 +6,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.3.0] - 2026-03-28
+
+### Added
+
+- **Episodic Learning Hook Wiring** (complete-episodic-learning-hooks):
+  - `session.start` hook: Automatically creates task episode when session starts
+  - `session.end` hook: Updates task episode state (success/failed) when session ends
+  - `session.idle` hook: Extracts success patterns from completed tasks
+
+- **Episodic Learning Tools** (user-facing):
+  - `task_episode_create`: Create task episode records manually
+  - `task_episode_query`: Query episodes by scope and state
+  - `similar_task_recall`: Find similar past tasks using vector similarity
+  - `retry_budget_suggest`: Get retry budget suggestions based on history
+  - `recovery_strategy_suggest`: Get recovery strategy suggestions after failures
+
+- **Automatic Similar Task Recall**: Enhanced `session.idle` to inject similar task context into system prompt using vector similarity
+
+- **Vector Similarity Upgrade**: `findSimilarTasks()` now supports vector-based similarity search with fallback to keyword matching
+
+- **Episodic Task Schema Enhancement**: Extended `EpisodicTaskRecord` to support `taskDescriptionVector` for vector-based similarity
+
+### Evidence
+
+| Feature | Spec | Code | Tests |
+|---------|------|------|-------|
+| session.start hook | hook-wiring/spec.md | src/index.ts:handleSessionStart | regression/plugin.test.ts |
+| session.end hook | hook-wiring/spec.md | src/index.ts:handleSessionEnd | regression/plugin.test.ts |
+| session.idle hook | hook-wiring/spec.md | src/index.ts:handleSessionIdle | regression/plugin.test.ts |
+| task_episode_create | episodic-tools/spec.md | src/index.ts | unit/episodic-task.test.ts |
+| task_episode_query | episodic-tools/spec.md | src/index.ts | unit/episodic-task.test.ts |
+| similar_task_recall | episodic-tools/spec.md | src/index.ts, src/store.ts | unit/episodic-task.test.ts |
+| retry_budget_suggest | episodic-tools/spec.md | src/index.ts, src/store.ts | - |
+| recovery_strategy_suggest | episodic-tools/spec.md | src/index.ts, src/store.ts | - |
+
+### Notes
+
+- `tool.execute` hook NOT implemented (OpenCode plugin API limitation)
+- Validation hook NOT implemented (no validation event available)
+- These are documented as future enhancements in backlog
+
+---
+
 ## [0.2.9] - 2026-03-28
 
 ### Added
