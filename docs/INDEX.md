@@ -24,6 +24,14 @@
 - Copy-paste examples
 - Time to read: 20 minutes (skim) / 1 hour (implement)
 
+**🚀 New Contributor**
+→ Start with: `DEVELOPMENT_WORKFLOW.md`
+- How to use backlog-to-openspec and release-workflow skills
+- Step-by-step development flow
+- Branch naming conventions
+- Quick reference commands
+- Time to read: 10 minutes
+
 **📋 Test Architect / QA Lead**
 → Start with: `memory-validation-checklist.md`
 - Complete specification
@@ -41,6 +49,20 @@
 ---
 
 ## 📄 Document Details
+
+### 0.5. DEVELOPMENT_WORKFLOW.md (NEW)
+**Purpose**: Development workflow & skill usage  
+**Best For**: New contributors, understanding the development process  
+**Contains**:
+- Overview of backlog-to-openspec and release-workflow skills
+- Step-by-step development flow (6 phases)
+- Branch naming conventions
+- Quick reference commands
+- Troubleshooting common issues
+
+**Read Time**: 10 minutes
+
+---
 
 ### 1. VALIDATION_README.md (346 lines)
 **Purpose**: Navigation & overview  
@@ -144,6 +166,12 @@
 3. test-implementation-guide.md (60 min)
 4. validation-priority-summary.md (10 min)
 5. Design test infrastructure (35 min)
+
+### Path 5: New Contributor (30 min)
+1. DEVELOPMENT_WORKFLOW.md (10 min) — Start here!
+2. README.md (10 min)
+3. github-migration.md (5 min)
+4. Quick start: run `docker compose up` and verify (5 min)
 
 ---
 
@@ -299,6 +327,7 @@
 - `operations.md` - Operations guide & rollback criteria
 - `embedding-migration.md` - Embedding model switching guide (Ollama ↔ OpenAI)
 - `lancedb-upgrades.md` - LanceDB upgrade notes
+- `DEVELOPMENT_WORKFLOW.md` - Development workflow using OpenCode skills
 
 ---
 

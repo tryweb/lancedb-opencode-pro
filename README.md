@@ -698,6 +698,8 @@ npm run typecheck
 npm run build
 ```
 
+For a complete development workflow guide (using OpenCode skills), see [DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md).
+
 ## Validation Commands
 
 The project provides layered validation workflows that can run locally or inside the Docker environment.
