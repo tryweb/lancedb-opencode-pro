@@ -40,7 +40,7 @@
 | BL-010 | `/remember` 指令或同等工具 | P0 | done | 2026-03-28-add-explicit-memory-commands | openspec/specs/explicit-memory-commands/ | memory_remember tool |
 | BL-011 | `/forget` 指令或同等工具 | P0 | done | 2026-03-28-add-explicit-memory-commands | openspec/specs/explicit-memory-commands/ | memory_forget tool (soft/hard delete) |
 | BL-012 | `/what-did-you-learn` 檢視 | P0 | done | 2026-03-28-add-explicit-memory-commands | openspec/specs/explicit-memory-commands/ | memory_what_did_you_learn tool |
-| BL-013 | `/why-this-memory` 解釋能力 | P1 | planned | TBD | TBD | 記憶命中理由可解釋 |
+| BL-013 | `/why-this-memory` 解釋能力 | P1 | done | 2026-03-29-why-this-memory-explanation | openspec/specs/why-this-memory/ | memory_why + memory_explain_recall 已實裝 v0.5.0 |
 | BL-034 | 多使用者 identity 模式（條件啟用） | P2 | done | 2026-03-28-extend-memory-metadata | openspec/specs/memory-metadata-extension/ | userId/teamId 欄位已實裝 |
 
 ## Epic 4 — 任務經驗記憶（Episodic Learning）
@@ -59,9 +59,9 @@
 |---|---|---|---|---|---|---|
 | BL-019 | Retry/Recovery evidence model | P1 | done | 2026-03-28-add-retry-recovery-evidence | openspec/specs/retry-recovery-evidence/ | RetryAttempt/RecoveryStrategy |
 | BL-020 | Retry budget 與 stop conditions（建議層） | P1 | done | 2026-03-28-add-retry-recovery-evidence | openspec/specs/retry-recovery-evidence/ | suggestRetryBudget |
-| BL-021 | Backoff / cooldown 訊號整合 | P1 | planned | TBD | TBD | 整合 OpenCode/OMO 事件 |
+| BL-021 | Backoff / cooldown 訊號整合 | P1 | planned | TBD | TBD | blocked by upstream events，待確認 OMO 是否提供 backoff 事件後再做 [Surface: Plugin] |
 | BL-022 | Strategy switching 建議器 | P1 | done | 2026-03-28-add-retry-recovery-evidence | openspec/specs/retry-recovery-evidence/ | suggestRecoveryStrategies |
-| BL-035 | Checkpoint/Resume evidence index（整合式） | P2 | planned | TBD | TBD | resume intelligence，非狀態機重做 |
+| BL-035 | Checkpoint/Resume evidence index（整合式） | P2 | cancelled | — | — | 價值不明確：BL-019/020 retry evidence 已足夠覆蓋需求 |
 
 ## Epic 6 — Citation 與記憶可信度
 
@@ -77,17 +77,27 @@
 | BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
 |---|---|---|---|---|---|---|
 | BL-027 | Weekly consolidation job 升級 | P1 | done | 2026-03-27-add-similarity-dedup-flagging | openspec/specs/similarity-dedup/ | session.compacted hook + dedup |
-| BL-028 | Promote episodic → semantic rules | P1 | planned | TBD | TBD | 高成功率規則升級 |
-| BL-029 | Human review gate for risky learning | P1 | planned | TBD | TBD | 高風險規則人工審核 |
+| BL-028 | Promote episodic → semantic rules | P1 | cancelled | — | — | 價值不明確：無明確觸發條件定義，現有 BL-019/020 已足夠 |
+| BL-029 | Human review gate for risky learning | P1 | cancelled | — | — | 價值不明確：管理層面機制，與 OpenCode 核心用途較遠 |
 
 ## Epic 8 — 觀測、評估、產品化
 
 | BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
 |---|---|---|---|---|---|---|
-| BL-030 | Learning dashboard summary | P1 | planned | TBD | TBD | 週摘要可視化 |
-| BL-031 | Learning KPI pipeline | P1 | planned | TBD | TBD | retry-to-success / lift 指標 |
-| BL-032 | Eval harness for learning quality | P2 | planned | TBD | TBD | 固定資料集回歸驗證 |
-| BL-033 | A/B testing framework | P2 | planned | TBD | TBD | learning feature 效益驗證 |
+| BL-030 | Learning dashboard summary | P0 | planned | TBD | TBD | 週摘要可視化 [Surface: Skill；利用既有 plugin tools 格式化呈現] |
+| BL-031 | Learning KPI pipeline | P0 | planned | TBD | TBD | retry-to-success / lift 指標 [Surface: Docs + optional plugin tool] |
+| BL-032 | Eval harness for learning quality | P1 | planned | TBD | TBD | 固定資料集回歸驗證 [Surface: Test-infra] |
+| BL-033 | A/B testing framework | P1 | planned | TBD | TBD | learning feature 效益驗證 [Surface: Test-infra + docs] |
+| BL-038 | Feedback-driven ranking / routing weights | P0 | planned | TBD | TBD | 根據 feedback 動態調整記憶排序與注入權重 [Surface: Plugin] |
+| BL-039 | Task-type aware injection policy | P0 | planned | TBD | TBD | 依任務類型（coding/docs/review/release）調整注入策略 [Surface: Plugin] |
+| BL-040 | Success pattern playbook surface 強化 | P1 | planned | TBD | TBD | 把已存的 episodic success patterns 產品化成可感知的跨任務 playbook surface [Surface: Plugin + Skill] |
+
+## Epic 9 — 儲存引擎與規模韌性
+
+| BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
+|---|---|---|---|---|---|---|
+| BL-036 | LanceDB ANN fast-path for large scopes | P2 | planned | TBD | TBD | 當單一 scope 記憶數持續成長時，利用 LanceDB 原生向量能力作為前置篩選/快速路徑 [Surface: Plugin] |
+| BL-037 | Event table TTL / archival | P1 | planned | TBD | TBD | 為 `effectiveness_events` 建立保留期與歸檔機制，降低長期 local store 成本 [Surface: Plugin] |
 
 ---
 
@@ -99,8 +109,13 @@ BL-001, BL-002, BL-005, BL-006, BL-008, BL-010, BL-011, BL-012
 ### Release B（經驗學習閉環）— ✅ DONE
 BL-003, BL-014, BL-015, BL-016, BL-017, BL-018, BL-019, BL-020
 
-### Release C（治理與產品化）— ✅ DONE
-BL-021, BL-022, BL-023, BL-024, BL-025, BL-026, BL-027, BL-028, BL-029, BL-030, BL-031, BL-034, BL-035
+### Release C（治理與產品化）— ✅ DONE（部分已取消）
+已完成：BL-022, BL-023, BL-024, BL-025, BL-026, BL-027, BL-034
+已取消（不值得做）：BL-028, BL-029, BL-035
+待處理：BL-021（Plugin；視 upstream 事件）, BL-030（Skill）, BL-031（Docs + optional plugin tool）, BL-032（Test-infra）, BL-033（Test-infra + docs）, BL-038（Plugin）, BL-039（Plugin）, BL-040（Plugin + Skill）
+
+### Release D（儲存引擎與規模韌性）— 📝 PLANNED
+BL-036, BL-037
 
 ---
 
