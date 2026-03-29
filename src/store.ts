@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { CaptureSkipReason, CitationSource, CitationStatus, EffectivenessSummary, EpisodicTaskRecord, MemoryEffectivenessEvent, MemoryRecord, RecallSource, SearchResult, SuccessPattern, TaskState, ValidationOutcome } from "./types.js";
+import type { CaptureSkipReason, CitationSource, CitationStatus, EffectivenessSummary, EpisodicTaskRecord, LastRecallSession, MemoryEffectivenessEvent, MemoryExplanation, MemoryRecord, RecallFactors, RecallSource, SearchResult, SuccessPattern, TaskState, ValidationOutcome } from "./types.js";
 import { generateId } from "./utils.js";
 import { cosineSimilarity, tokenize } from "./utils.js";
 
@@ -570,6 +570,60 @@ export class MemoryStore {
     }
 
     return { valid: false, status: citation.status, reason: "Unknown citation status" };
+  }
+
+  async explainMemory(
+    id: string,
+    scopes: string[],
+    currentScope: string,
+    recencyHalfLifeHours: number = 72,
+    globalDiscountFactor: number = 0.7,
+  ): Promise<MemoryExplanation | null> {
+    const rows = await this.readByScopes(scopes);
+    const match = rows.find((row) => this.matchesId(row.id, id));
+    if (!match) return null;
+
+    const now = Date.now();
+    const ageHours = (now - match.timestamp) / (1000 * 60 * 60);
+    const halfLifeMs = recencyHalfLifeHours * 60 * 60 * 1000;
+    const decayFactor = Math.exp(-ageHours / recencyHalfLifeHours);
+    const isGlobal = match.scope === "global";
+
+    const citation = match.citationSource
+      ? {
+          source: match.citationSource,
+          status: match.citationStatus,
+          timestamp: match.citationTimestamp,
+        }
+      : undefined;
+
+    const factors: RecallFactors = {
+      relevance: {
+        overall: 0,
+        vectorScore: 0,
+        bm25Score: 0,
+      },
+      recency: {
+        timestamp: match.timestamp,
+        ageHours,
+        withinHalfLife: ageHours <= recencyHalfLifeHours,
+        decayFactor,
+      },
+      citation,
+      importance: match.importance,
+      scope: {
+        memoryScope: match.scope,
+        matchesCurrentScope: match.scope === currentScope,
+        isGlobal,
+      },
+    };
+
+    return {
+      memoryId: match.id,
+      text: match.text,
+      factors,
+      generatedAt: now,
+    };
   }
 
   async refreshExpiredCitations(scope: string, maxAgeDays: number = 7): Promise<number> {

@@ -9,7 +9,7 @@ import { extractPreferenceSignals, aggregatePreferences, resolveConflicts, build
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
-import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, ValidationOutcome, ValidationType } from "./types.js";
+import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, LastRecallSession, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, ValidationOutcome, ValidationType } from "./types.js";
 import { generateId } from "./utils.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 
@@ -83,6 +83,22 @@ const plugin: Plugin = async (input) => {
         importanceWeight: state.config.retrieval.importanceWeight,
         globalDiscountFactor: state.config.globalDiscountFactor,
       });
+
+      state.lastRecall = {
+        timestamp: Date.now(),
+        query,
+        results: results.map((r) => ({
+          memoryId: r.record.id,
+          score: r.score,
+          factors: {
+            relevance: { overall: r.score, vectorScore: r.vectorScore, bm25Score: r.bm25Score },
+            recency: { timestamp: r.record.timestamp, ageHours: 0, withinHalfLife: true, decayFactor: 1 },
+            citation: r.record.citationSource ? { source: r.record.citationSource, status: r.record.citationStatus } : undefined,
+            importance: r.record.importance,
+            scope: { memoryScope: r.record.scope, matchesCurrentScope: r.record.scope === activeScope, isGlobal: r.record.scope === "global" },
+          },
+        })),
+      };
 
       // Extract preference signals from memories
       const allSignals = results.map((r) => extractPreferenceSignals(r.record)).flat();
@@ -212,6 +228,22 @@ const plugin: Plugin = async (input) => {
             importanceWeight: state.config.retrieval.importanceWeight,
             globalDiscountFactor: state.config.globalDiscountFactor,
           });
+
+          state.lastRecall = {
+            timestamp: Date.now(),
+            query: args.query,
+            results: results.map((r) => ({
+              memoryId: r.record.id,
+              score: r.score,
+              factors: {
+                relevance: { overall: r.score, vectorScore: r.vectorScore, bm25Score: r.bm25Score },
+                recency: { timestamp: r.record.timestamp, ageHours: 0, withinHalfLife: true, decayFactor: 1 },
+                citation: r.record.citationSource ? { source: r.record.citationSource, status: r.record.citationStatus } : undefined,
+                importance: r.record.importance,
+                scope: { memoryScope: r.record.scope, matchesCurrentScope: r.record.scope === activeScope, isGlobal: r.record.scope === "global" },
+              },
+            })),
+          };
 
           await state.store.putEvent({
             id: generateId(),
@@ -1027,6 +1059,96 @@ ${recentSamples}
           }).join("\n");
         },
       }),
+      memory_why: tool({
+        description: "Explain why a specific memory was recalled",
+        args: {
+          id: tool.schema.string().min(8),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
+
+          const explanation = await state.store.explainMemory(
+            args.id,
+            scopes,
+            activeScope,
+            state.config.retrieval.recencyHalfLifeHours,
+            state.config.globalDiscountFactor,
+          );
+
+          if (!explanation) {
+            return `Memory ${args.id} not found in current scope.`;
+          }
+
+          const f = explanation.factors;
+          const recencyText = f.recency.withinHalfLife
+            ? `within ${f.recency.ageHours.toFixed(1)}h half-life`
+            : `beyond half-life (${f.recency.ageHours.toFixed(1)}h old)`;
+          const citationText = f.citation
+            ? `${f.citation.source ?? "unknown"}/${f.citation.status ?? "n/a"}`
+            : "N/A";
+          const scopeText = f.scope.matchesCurrentScope
+            ? "matches current project"
+            : f.scope.isGlobal
+              ? "from global scope"
+              : "different project scope";
+
+          return `Memory: "${explanation.text.slice(0, 80)}..."
+Explanation:
+- Recency: ${recencyText} (decay: ${(f.recency.decayFactor * 100).toFixed(0)}%)
+- Citation: ${citationText}
+- Importance: ${f.importance.toFixed(2)}
+- Scope: ${scopeText}`;
+        },
+      }),
+      memory_explain_recall: tool({
+        description: "Explain the factors behind the last recall operation in this session",
+        args: {
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+          const lastRecall = state.lastRecall;
+          if (!lastRecall) {
+            return "No recent recall to explain. Use memory_search or wait for auto-recall first.";
+          }
+
+          const activeScope = args.scope ?? deriveProjectScope(context.worktree);
+          const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
+
+          const explanations: string[] = [];
+          for (const result of lastRecall.results) {
+            const explanation = await state.store.explainMemory(
+              result.memoryId,
+              scopes,
+              activeScope,
+              state.config.retrieval.recencyHalfLifeHours,
+              state.config.globalDiscountFactor,
+            );
+            if (!explanation) continue;
+
+            const f = explanation.factors;
+            const recencyText = f.recency.withinHalfLife
+              ? "recent"
+              : "older";
+            explanations.push(
+              `${result.memoryId.slice(0, 8)}: ${(result.score * 100).toFixed(0)}% relevance, ${recencyText}, ${f.citation?.status ?? "no citation"}`,
+            );
+          }
+
+          return `## Last Recall Explanation
+Query: "${lastRecall.query}"
+Results: ${lastRecall.results.length}
+
+${explanations.join("\n")}`;
+        },
+      }),
     },
   };
 
@@ -1046,6 +1168,7 @@ async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<Runtime
     initialized: false,
     captureBuffer: new Map(),
     activeEpisodes: new Map(),
+    lastRecall: null,
     ensureInitialized: async () => {
       if (state.initialized) return;
       try {
@@ -1276,6 +1399,7 @@ interface RuntimeState {
   initialized: boolean;
   captureBuffer: Map<string, string[]>;
   activeEpisodes: Map<string, string>;
+  lastRecall: LastRecallSession | null;
   ensureInitialized: () => Promise<void>;
 }
 

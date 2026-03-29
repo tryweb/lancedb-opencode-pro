@@ -366,3 +366,47 @@ export interface EpisodicTaskRecord {
   metadataJson: string;
   taskDescriptionVector?: number[];
 }
+
+// === Memory Explanation Types ===
+
+export interface RecallFactors {
+  relevance: {
+    overall: number;
+    vectorScore: number;
+    bm25Score: number;
+  };
+  recency: {
+    timestamp: number;
+    ageHours: number;
+    withinHalfLife: boolean;
+    decayFactor: number;
+  };
+  citation?: {
+    source?: CitationSource;
+    status?: CitationStatus;
+    timestamp?: number;
+  };
+  importance: number;
+  scope: {
+    memoryScope: string;
+    matchesCurrentScope: boolean;
+    isGlobal: boolean;
+  };
+}
+
+export interface MemoryExplanation {
+  memoryId: string;
+  text: string;
+  factors: RecallFactors;
+  generatedAt: number;
+}
+
+export interface LastRecallSession {
+  timestamp: number;
+  query: string;
+  results: Array<{
+    memoryId: string;
+    score: number;
+    factors: RecallFactors;
+  }>;
+}
