@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires git, gh, docker compose, and npm CLI.
 metadata:
   author: tryweb
-  version: "2.0"
+  version: "2.1"
   generatedBy: "manual"
 ---
 
@@ -20,6 +20,49 @@ This version adds mandatory anti-drift gates so we do not repeat:
 
 ---
 
+## Phase 0 — Git Safety Gate (CRITICAL)
+
+**Goal**: ensure release starts from a safe and reproducible git state.
+
+Run before any release actions:
+
+```bash
+# 1) sync refs
+git fetch origin --prune
+
+# 2) confirm current branch
+git rev-parse --abbrev-ref HEAD
+
+# 3) working tree must be clean
+git status --porcelain
+
+# 4) detect unmerged remote branches relative to main
+git branch -r --no-merged origin/main
+
+# 5) confirm npm identity on host
+npm whoami
+```
+
+Pass conditions:
+- Current branch is `main`
+- Working tree is clean
+- Intended feature branches are already merged to `origin/main`
+- npm account is available (`npm whoami` succeeds)
+
+Hard rules:
+- Never start release from `feat/*` or `fix/*`
+- Never use `git stash` as release transport
+- If any intended feature branch is not merged to `main`, stop release and merge first
+
+### Failure Mode → Remediation
+
+| Failure mode | Detect with | Safe remediation |
+|---|---|---|
+| Dirty tree | `git status --porcelain` not empty | Commit changes, or intentional `git reset --hard` if discard is intended |
+| Missing upstream push | `git rev-parse --abbrev-ref --symbolic-full-name @{upstream}` fails | `git push -u origin <current-branch>` |
+| Wrong base branch | `git rev-parse --abbrev-ref HEAD` is not `main` | `git checkout main && git pull origin main` |
+| Unmerged feature before release | `git branch -r --no-merged origin/main` includes intended `origin/feat/*` | Merge feature branch to main before release |
+
 ## Pre-Conditions (Check Before Starting)
 
 - All intended feature changes are merged to `main`
@@ -27,10 +70,12 @@ This version adds mandatory anti-drift gates so we do not repeat:
 - `npm whoami` returns the publishing account (run on host)
 - `NPM_TOKEN` secret is set in GitHub Actions repository settings
 - No open `fix/` branches with uncommitted work
+- No intended `feat/` branches remain unmerged into `main`
 
 ```bash
 git status --short
 npm whoami
+git branch -r --no-merged origin/main
 ```
 
 If working tree is dirty: stop and clean up before release.
@@ -121,8 +166,10 @@ chore: bump version to X.Y.Z and update changelog
 ## Phase 5 — Release Branch
 
 ```bash
+git checkout main
+git pull origin main
 git checkout -b release/vX.Y.Z
-git push origin release/vX.Y.Z
+git push origin release/vX.Y.Z -u
 ```
 
 ---

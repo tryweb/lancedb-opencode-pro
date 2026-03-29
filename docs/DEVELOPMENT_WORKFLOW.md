@@ -45,6 +45,44 @@ gh auth status   # Should show "Logged in to github.com"
 
 ---
 
+## Shared Git Safety Gate (CRITICAL)
+
+Run this gate **before** any feature or release operation.
+
+```bash
+# 1) Sync refs
+git fetch origin --prune
+
+# 2) Confirm current branch
+git rev-parse --abbrev-ref HEAD
+
+# 3) Working tree must be clean
+git status --porcelain
+```
+
+### Pass Conditions
+
+- For feature work: current branch is `main` (new work) or `feat/<change-id>` (resume work)
+- For release work: current branch is `main`
+- `git status --porcelain` output is empty
+
+### Hard Rules
+
+- **Never use `git stash` as workflow transport**
+- If tree is dirty: commit changes, or intentionally discard with `git reset --hard`
+- If upstream is missing: `git push -u origin <current-branch>`
+
+### Failure Mode → Remediation
+
+| Failure mode | Detect with | Safe remediation |
+|---|---|---|
+| Dirty tree | `git status --porcelain` not empty | `git add -A && git commit -m "wip: ..."` or intentional `git reset --hard` |
+| Missing upstream | `git rev-parse --abbrev-ref --symbolic-full-name @{upstream}` fails | `git push -u origin <current-branch>` |
+| Wrong base branch | branch is not expected for current phase | `git checkout main && git pull origin main` |
+| Unmerged feature before release | `git branch -r --no-merged origin/main` includes intended `origin/feat/*` | Merge feature branch to main first |
+
+---
+
 ## Development Workflow
 
 ### Phase 1: From Backlog to Implementation
@@ -104,15 +142,16 @@ When prompted, provide:
 **What happens:**
 
 1. **Backlog Normalization** — Parses and validates the backlog item
-2. **Create OpenSpec Change** — Runs `openspec new change "<id>"`
-3. **Create Feature Branch** — Creates `feat/<change-id>` branch and pushes to origin ⭐
-4. **Write Proposal** — Documents problem, goal, scope
-5. **Write Design** — Architecture decisions, runtime surface, entrypoint
-6. **Write Specs** — Testable requirements with scenarios
-7. **Build Tasks** — Atomic implementation tasks with verification matrix
+2. **Git Safety Gate** — Enforces clean tree + branch safety before change creation
+3. **Create OpenSpec Change** — Runs `openspec new change "<id>"`
+4. **Create Feature Branch** — Creates `feat/<change-id>` branch and pushes to origin ⭐
+5. **Write Proposal** — Documents problem, goal, scope
+6. **Write Design** — Architecture decisions, runtime surface, entrypoint
+7. **Write Specs** — Testable requirements with scenarios
+8. **Build Tasks** — Atomic implementation tasks with verification matrix
 
 **Output:**
-- OpenSpec artifacts in `.opencode/changes/<change-id>/`
+- OpenSpec artifacts in `openspec/changes/<change-id>/`
 - Feature branch: `feat/<change-id>`
 
 ---
@@ -131,6 +170,18 @@ If not, switch manually:
 ```bash
 git checkout feat/<change-id>
 ```
+
+If working tree is dirty at this point:
+
+```bash
+# Option A: keep changes
+git add -A && git commit -m "wip: save local changes"
+
+# Option B: intentionally discard
+git reset --hard
+```
+
+Do **not** use `git stash` in this workflow.
 
 ---
 
@@ -162,8 +213,8 @@ git commit -m "feat: implement <change-id>
 
 - Proposal: docs/...
 - Design: docs/...
-- Specs: .opencode/changes/<change-id>/specs/
-- Tasks: .opencode/changes/<change-id>/tasks.md
+- Specs: openspec/changes/<change-id>/specs/
+- Tasks: openspec/changes/<change-id>/tasks.md
 - Code: src/...
 - Tests: test/..."
 ```
@@ -234,15 +285,26 @@ When you're ready to publish a new version:
 
 The skill will guide you through:
 
-1. **Local Preparation** — Run `npm run release:check` in Docker
-2. **Claim-to-Evidence Gate** — Verify every changelog claim has evidence
-3. **Operability Gate** — Verify user-facing features have runtime entrypoints
-4. **Version & Changelog** — Update `package.json` and `CHANGELOG.md`
-5. **Release Branch** — Create `release/vX.Y.Z` branch
-6. **PR to Main** — Create PR with pre-merge checks
-7. **Branch Cleanup Verification** — Ensure remote `release/vX.Y.Z` branch is deleted/pruned
-8. **Tag and Trigger CI** — Push tag to trigger npm publish
-9. **Post-Release Verification** — Confirm npm + GitHub Release
+1. **Git Safety Gate** — Require clean tree + start from `main`
+2. **Local Preparation** — Run `npm run release:check` in Docker
+3. **Claim-to-Evidence Gate** — Verify every changelog claim has evidence
+4. **Operability Gate** — Verify user-facing features have runtime entrypoints
+5. **Version & Changelog** — Update `package.json` and `CHANGELOG.md`
+6. **Release Branch** — Create `release/vX.Y.Z` branch
+7. **PR to Main** — Create PR with pre-merge checks
+8. **Branch Cleanup Verification** — Ensure remote `release/vX.Y.Z` branch is deleted/pruned
+9. **Tag and Trigger CI** — Push tag to trigger npm publish
+10. **Post-Release Verification** — Confirm npm + GitHub Release
+
+Before release branch creation, verify no intended feature branch is left unmerged:
+
+```bash
+git fetch origin --prune
+git checkout main && git pull origin main
+git branch -r --no-merged origin/main
+```
+
+If output still includes intended `origin/feat/*`, merge those features first.
 
 ### Important: Squash merge topology is expected
 
@@ -298,6 +360,9 @@ git branch
 
 # Check status
 git status --short
+
+# Check unmerged branches before release
+git branch -r --no-merged origin/main
 ```
 
 ### Branch Naming Convention
@@ -354,7 +419,7 @@ If you're unsure, ask: "Does this need a specification document?" If no → use 
 | Purpose | Location |
 |---------|----------|
 | Backlog | `docs/backlog.md` |
-| OpenSpec changes | `.opencode/changes/<change-id>/` |
+| OpenSpec changes | `openspec/changes/<change-id>/` |
 | Release notes | `CHANGELOG.md` |
 | Package config | `package.json` |
 
@@ -368,7 +433,7 @@ Either:
 1. Commit changes: `git add . && git commit`
 2. Or discard local changes intentionally: `git reset --hard`
 
-For release flow specifically, do **not** use `git stash` as a transport mechanism before rebase.
+For all workflows, do **not** use `git stash` as a transport mechanism.
 
 ### "Branch protection prevents push"
 

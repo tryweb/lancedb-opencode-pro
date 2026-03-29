@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires openspec CLI.
 metadata:
   author: tryweb
-  version: "1.1"
+  version: "1.2"
   generatedBy: "manual"
 ---
 
@@ -45,6 +45,46 @@ And enforce these sections in artifacts:
 5. **Changelog Wording Class**: `internal-only` or `user-facing`
 
 ---
+
+## Phase 0 — Git Safety Gate (CRITICAL)
+
+**Goal**: block unsafe branch operations before creating a new OpenSpec change.
+
+Run this gate before `openspec new change`:
+
+```bash
+# 1) working tree must be clean
+git status --porcelain
+
+# 2) identify current branch
+git rev-parse --abbrev-ref HEAD
+
+# 3) sync remote refs for branch safety checks
+git fetch origin --prune
+```
+
+Pass conditions:
+- `git status --porcelain` output is empty
+- Current branch is `main` (preferred) or `feat/<existing-change-id>` when resuming existing work
+- If resuming from `feat/<existing-change-id>`, branch has upstream (if not: `git push -u origin <branch>`)
+
+Failure handling (hard rules):
+- **Dirty tree**: commit changes or intentionally discard with `git reset --hard`
+- **Never use `git stash` as workflow transport**
+- **Wrong starting branch**: switch to `main` and sync first
+
+```bash
+git checkout main
+git pull origin main
+```
+
+### Failure Mode → Remediation
+
+| Failure mode | Detect with | Safe remediation |
+|---|---|---|
+| Dirty tree | `git status --porcelain` not empty | `git add -A && git commit -m "wip: ..."` OR intentional `git reset --hard` |
+| Missing upstream | `git rev-parse --abbrev-ref --symbolic-full-name @{upstream}` fails | `git push -u origin <current-branch>` |
+| Wrong base branch | `git rev-parse --abbrev-ref HEAD` is not `main`/`feat/*` | `git checkout main && git pull origin main` |
 
 ## Phase 1 — Backlog Normalization
 
@@ -106,7 +146,8 @@ git push origin "feat/${CHANGE_ID}" -u
 - Chores: `chore/<change-id>`
 
 **If working tree is dirty**:
-- Stash or commit current changes first
+- Commit current changes first (or intentionally discard with `git reset --hard`)
+- Never use `git stash` as branch transport
 - Never mix unrelated work in the same branch
 
 ---
