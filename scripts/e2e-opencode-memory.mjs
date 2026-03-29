@@ -1,19 +1,20 @@
 import plugin from "../dist/index.js";
+import { createServer } from "node:http";
 
 const DB_PATH = "/tmp/opencode-memory-e2e";
 const SESSION_ID = "sess-e2e-001";
-const OLLAMA_BASE_URL = process.env.LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL || "http://192.168.11.206:11443";
+const MOCK_OLLAMA_PORT = 11439;
 
-function makeClient() {
+function makeClient(baseUrl) {
   const config = {
     memory: {
       provider: "lancedb-opencode-pro",
       dbPath: DB_PATH,
-      embedding: {
-        provider: "ollama",
-        model: "nomic-embed-text",
-        baseUrl: OLLAMA_BASE_URL,
-      },
+        embedding: {
+          provider: "ollama",
+          model: "nomic-embed-text",
+          baseUrl,
+        },
       retrieval: {
         mode: "hybrid",
         vectorWeight: 0.7,
@@ -71,22 +72,74 @@ function assert(condition, message) {
   }
 }
 
-async function run() {
-  const hooks = await plugin({
-    client: makeClient(),
-    project: {
-      id: "proj-e2e",
-      worktree: "/workspace",
-      vcs: "git",
-      time: { created: Date.now() },
-    },
-    directory: "/workspace",
-    worktree: "/workspace",
-    serverUrl: new URL("http://localhost:4096"),
-    $: () => {
-      throw new Error("shell not needed in this e2e");
-    },
+function createDeterministicVector(text, dim = 768) {
+  const seed = Array.from(text).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return Array.from({ length: dim }, (_, i) => ((seed + i * 17) % 1000) / 1000);
+}
+
+async function startMockOllamaServer(port = MOCK_OLLAMA_PORT) {
+  const server = createServer(async (req, res) => {
+    if (req.method !== "POST" || req.url !== "/api/embeddings") {
+      res.statusCode = 404;
+      res.end("not found");
+      return;
+    }
+
+    let body = "";
+    for await (const chunk of req) {
+      body += chunk;
+    }
+
+    let prompt = "";
+    try {
+      const parsed = JSON.parse(body);
+      prompt = typeof parsed.prompt === "string" ? parsed.prompt : "";
+    } catch {
+      prompt = "";
+    }
+
+    const embedding = createDeterministicVector(prompt, 768);
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ embedding }));
   });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "0.0.0.0", () => resolve(undefined));
+  });
+
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    close: () => new Promise((resolve, reject) => {
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve(undefined);
+      });
+    }),
+  };
+}
+
+async function run() {
+  const mock = await startMockOllamaServer();
+  try {
+    process.env.LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL = mock.baseUrl;
+    process.env.OLLAMA_BASE_URL = mock.baseUrl;
+
+    const hooks = await plugin({
+      client: makeClient(mock.baseUrl),
+      project: {
+        id: "proj-e2e",
+        worktree: "/workspace",
+        vcs: "git",
+        time: { created: Date.now() },
+      },
+      directory: "/workspace",
+      worktree: "/workspace",
+      serverUrl: new URL("http://localhost:4096"),
+      $: () => {
+        throw new Error("shell not needed in this e2e");
+      },
+    });
 
   assert(hooks.tool, "tool hooks should exist");
   assert(hooks["experimental.text.complete"], "experimental.text.complete hook should exist");
@@ -185,6 +238,54 @@ async function run() {
   console.log("  - recovery_strategy_suggest: PASS");
 
   console.log("E2E PASS: episodic learning tools verified.");
+
+  // === Memory Explanation E2E Tests ===
+  console.log("Running memory explanation E2E tests...");
+
+  const rememberResult = await hooks.tool.memory_remember.execute({
+    text: "Use Docker Compose for local development with volume mounting, reproducible service wiring, and stable test execution across CI and local environments.",
+    category: "fact",
+  }, ctx);
+  console.log(`  - memory_remember raw output: ${String(rememberResult)}`);
+  assert(rememberResult.includes("Stored memory"), "memory_remember should succeed");
+  console.log("  - memory_remember (setup): PASS");
+
+  const memIdMatch = rememberResult.match(/memory ([a-zA-Z0-9-]+)/);
+  assert(memIdMatch && memIdMatch[1], "memory_remember should return memory id");
+  const memId = memIdMatch[1];
+
+  // Test memory_why with valid ID
+  const whyResult = await hooks.tool.memory_why.execute({ id: memId }, ctx);
+  assert(whyResult.includes("Memory:"), "memory_why should return explanation");
+  assert(whyResult.includes("Explanation:"), "memory_why should include explanation section");
+  assert(whyResult.includes("Recency:") || whyResult.includes("Citation:") || whyResult.includes("Importance:") || whyResult.includes("Scope:"), "memory_why should include factors");
+  console.log("  - memory_why with valid ID: PASS");
+
+  // Test memory_why with invalid ID
+  const whyInvalid = await hooks.tool.memory_why.execute({ id: "invalid-id-123" }, ctx);
+  assert(whyInvalid.includes("not found"), "memory_why with invalid ID should return not found");
+  console.log("  - memory_why with invalid ID: PASS");
+
+  // Test memory_explain_recall (no recall yet, should return no recall message)
+  const explainRecall = await hooks.tool.memory_explain_recall.execute({}, ctx);
+  assert(
+    explainRecall.includes("No recent recall") || explainRecall.includes("Last Recall") || explainRecall.includes("Query:") || explainRecall.includes("Results:"),
+    "memory_explain_recall should return either no-recall message or current recall explanation",
+  );
+  console.log("  - memory_explain_recall (initial state): PASS");
+
+  // Trigger a recall via memory_search to populate lastRecall
+  await hooks.tool.memory_search.execute({ query: "Docker Compose", limit: 3 }, ctx);
+
+  // Now memory_explain_recall should work
+  const explainRecall2 = await hooks.tool.memory_explain_recall.execute({}, ctx);
+  assert(explainRecall2.includes("Last Recall") || explainRecall2.includes("Query:") || explainRecall2.includes("Results:"), "memory_explain_recall should return recall explanation");
+  console.log("  - memory_explain_recall (after recall): PASS");
+
+    console.log("E2E PASS: memory explanation tools verified.");
+  } finally {
+    await mock.close();
+  }
 }
 
 run().catch((error) => {
