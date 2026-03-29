@@ -6,6 +6,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.5.0] - 2026-03-29
+
+### Added
+
+- **Memory Explanation Tools** (`why-this-memory`, user-facing):
+  - `memory_why`: explain why a specific memory was recalled
+  - `memory_explain_recall`: explain factors behind the latest recall operation
+  - `MemoryExplanation` / `RecallFactors` data model and `explainMemory()` store pathway for recency, citation, importance, and scope factors
+
+### Changed
+
+- **E2E Reliability**:
+  - `scripts/e2e-opencode-memory.mjs` now uses deterministic mock embedding flow to keep e2e stable in both container and local environments.
+
+- **Workflow Hardening** (internal-only):
+  - Added shared Git Safety Gate guidance to `backlog-to-openspec`, `release-workflow`, and `docs/DEVELOPMENT_WORKFLOW.md`.
+  - Unified no-stash rule and added failure-mode remediation tables.
+
+### Evidence
+
+| Feature | Spec | Code | Tests | Surface |
+|---------|------|------|-------|---------|
+| memory_why tool | openspec/specs/why-this-memory/spec.md#requirement-memory_why-explains-recall-factors-for-a-target-memory | src/index.ts, src/store.ts, src/types.ts | test/unit/explanation.test.ts, scripts/e2e-opencode-memory.mjs | opencode-tool |
+| memory_explain_recall tool | openspec/specs/why-this-memory/spec.md#requirement-memory_explain_recall-explains-last-recall-operation | src/index.ts, src/store.ts | scripts/e2e-opencode-memory.mjs | opencode-tool |
+| workflow safety gate (internal) | openspec/changes/archive/2026-03-29-why-this-memory-explanation/tasks.md | .opencode/skills/backlog-to-openspec/SKILL.md, .opencode/skills/release-workflow/SKILL.md, docs/DEVELOPMENT_WORKFLOW.md | docker compose exec opencode-dev npm run release:check | internal-only |
+
+---
+
 ## [0.4.0] - 2026-03-28
 
 ### Added
