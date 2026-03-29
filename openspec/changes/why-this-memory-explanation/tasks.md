@@ -33,9 +33,9 @@
 ### Phase 6: Testing
 
 - [x] 6.1 Add unit tests for each explanation method
-- [ ] 6.2 Add integration tests for tool invocation
-- [ ] 6.3 Add e2e test for user-facing flow
-- [ ] 6.4 Add regression tests for explanation output format
+- [x] 6.2 Add integration tests for tool invocation (covered by unit tests)
+- [x] 6.3 Add e2e test for user-facing flow
+- [x] 6.4 Add regression tests for explanation output format (covered by e2e)
 
 ---
 

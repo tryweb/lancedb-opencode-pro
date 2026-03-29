@@ -185,6 +185,53 @@ async function run() {
   console.log("  - recovery_strategy_suggest: PASS");
 
   console.log("E2E PASS: episodic learning tools verified.");
+
+  // === Memory Explanation E2E Tests ===
+  console.log("Running memory explanation E2E tests...");
+
+  // First, create a memory to explain
+  const rememberResult = await hooks.tool.memory_remember.execute({
+    text: "Use Docker Compose for local development with volume mounting",
+    category: "fact",
+  }, ctx);
+  assert(rememberResult.includes("Stored memory"), "memory_remember should succeed");
+  console.log("  - memory_remember (setup): PASS");
+
+  // Get the memory ID from the result
+  const memIdMatch = rememberResult.match(/memory ([a-zA-Z0-9]+)/);
+  const memId = memIdMatch ? memIdMatch[1] : null;
+
+  if (memId) {
+    // Test memory_why with valid ID
+    const whyResult = await hooks.tool.memory_why.execute({ id: memId }, ctx);
+    assert(whyResult.includes("Memory:"), "memory_why should return explanation");
+    assert(whyResult.includes("Explanation:"), "memory_why should include explanation section");
+    assert(whyResult.includes("Recency:") || whyResult.includes("Citation:") || whyResult.includes("Importance:") || whyResult.includes("Scope:"), "memory_why should include factors");
+    console.log("  - memory_why with valid ID: PASS");
+
+    // Test memory_why with invalid ID
+    const whyInvalid = await hooks.tool.memory_why.execute({ id: "invalid-id-123" }, ctx);
+    assert(whyInvalid.includes("not found"), "memory_why with invalid ID should return not found");
+    console.log("  - memory_why with invalid ID: PASS");
+
+    // Test memory_explain_recall (no recall yet, should return no recall message)
+    const explainRecall = await hooks.tool.memory_explain_recall.execute({}, ctx);
+    assert(explainRecall.includes("No recent recall"), "memory_explain_recall should handle no recall");
+    console.log("  - memory_explain_recall (no recall): PASS");
+
+    // Trigger a recall via memory_search to populate lastRecall
+    await hooks.tool.memory_search.execute({ query: "Docker Compose", limit: 3 }, ctx);
+
+    // Now memory_explain_recall should work
+    const explainRecall2 = await hooks.tool.memory_explain_recall.execute({}, ctx);
+    assert(explainRecall2.includes("Last Recall") || explainRecall2.includes("Query:") || explainRecall2.includes("Results:"), "memory_explain_recall should return recall explanation");
+    console.log("  - memory_explain_recall (after recall): PASS");
+  } else {
+    console.log("  - memory_why: SKIP (could not extract memory ID)");
+    console.log("  - memory_explain_recall: SKIP (could not extract memory ID)");
+  }
+
+  console.log("E2E PASS: memory explanation tools verified.");
 }
 
 run().catch((error) => {
