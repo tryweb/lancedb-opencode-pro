@@ -8,7 +8,7 @@
 
 ## Overview
 
-lancedb-opencode-pro is a long-term memory provider for OpenCode, enabling persistent memory across sessions. It uses LanceDB as the vector database and supports multiple embedding providers (Ollama, OpenAI).
+lancedb-opencode-pro is a long-term memory provider for OpenCode, enabling persistent memory across sessions. It uses LanceDB as its primary storage engine with no immediate migration plans; the storage boundary between plugin logic and persistence is clearly defined (see Storage Engine Boundary).
 
 ### Key Features
 
@@ -142,6 +142,47 @@ flowchart TD
 **Key Exports**:
 - `summarizeContent()`: Summarize text
 - `calculateInjectionLimit()`: Calculate injection budget
+
+---
+
+## Storage Engine Boundary
+
+### Overview
+
+LanceDB is the designated primary storage engine for this project. No migration to an alternative vector database is currently planned. The roadmap reflects this commitment, with future work focused on optimization within LanceDB rather than replacement.
+
+### Storage Contract
+
+The storage engine provides these persistence primitives:
+
+- **Embedded persistence**: Local file-based database with no external server dependency
+- **Table/schema ownership**: Full control over table structures (`memories`, `effectiveness_events`)
+- **Vector and text indexes**: Native support for IVF-PQ vector indexes and BM25 full-text search
+- **Filtering predicates**: Efficient scalar filtering via LanceDB's query DSL
+- **Schema evolution**: Support for additive column migrations
+
+### Responsibility Split
+
+| Layer | Owner | Responsibilities |
+|-------|-------|-------------------|
+| Plugin JavaScript | `lancedb-opencode-pro` | Extraction logic, capture orchestration, hybrid retrieval composition, rerank/scope logic, injection decisions, event governance, effectiveness tracking |
+| LanceDB | LanceDB library | Persistence primitives, vector index optimization, FTS index management, query execution, disk I/O |
+
+### Boundary-Aligned Future Work
+
+The following backlog items respect this storage boundary:
+
+- **BL-036**: Large-scope ANN fast-path optimization (query-side, no engine switch)
+- **BL-037**: Effectiveness events TTL/archival (retention policy, compliant with LanceDB capabilities)
+
+### Re-evaluation Triggers
+
+Storage engine re-evaluation would be triggered only by:
+1. Fundamental performance issues that cannot be resolved within LanceDB
+2. Significant changes in LanceDB's maintenance status or roadmap direction
+3. New requirements that fundamentally conflict with LanceDB's architecture
+
+These triggers are documented in `docs/roadmap.md` and represent exceptional cases, not planned work.
 
 ---
 
