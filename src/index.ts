@@ -13,8 +13,33 @@ import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType
 import { validateEpisodicRecordArray } from "./types.js";
 import { generateId } from "./utils.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
+import type { MemoryCategory, TaskType, InjectionProfile } from "./types.js";
 
 const SCHEMA_VERSION = 1;
+
+const CODING_KEYWORDS = ["bug", "error", "function", "refactor", "implement", "fix", "code", "class", "module", "import", "export", "async", "await", "typescript", "javascript", "python", "debug", "stack", "trace"];
+const DOCS_KEYWORDS = ["document", "readme", "explain", "describe", "what is", "how to", "guide", "tutorial", "reference", "api", "specification", "write", "create doc"];
+const REVIEW_KEYWORDS = ["review", "pr", "pull request", "check", "approve", "reject", "comment", "feedback", "lgtm", "nitpick"];
+const RELEASE_KEYWORDS = ["deploy", "release", "version", "build", "publish", "npm", "docker", "ci", "cd", "pipeline", "rollback"];
+
+function detectTaskType(query: string): TaskType {
+  const lowerQuery = query.toLowerCase();
+  const codingScore = CODING_KEYWORDS.filter((kw) => lowerQuery.includes(kw)).length;
+  const docsScore = DOCS_KEYWORDS.filter((kw) => lowerQuery.includes(kw)).length;
+  const reviewScore = REVIEW_KEYWORDS.filter((kw) => lowerQuery.includes(kw)).length;
+  const releaseScore = RELEASE_KEYWORDS.filter((kw) => lowerQuery.includes(kw)).length;
+  const maxScore = Math.max(codingScore, docsScore, reviewScore, releaseScore);
+  if (maxScore === 0) return "general";
+  if (codingScore === maxScore) return "coding";
+  if (docsScore === maxScore) return "documentation";
+  if (reviewScore === maxScore) return "review";
+  if (releaseScore === maxScore) return "release";
+  return "general";
+}
+
+function getCategoryWeights(taskType: TaskType, profiles: Record<TaskType, InjectionProfile>): Partial<Record<MemoryCategory, number>> {
+  return profiles[taskType]?.categoryWeights ?? profiles.general.categoryWeights;
+}
 
 const plugin: Plugin = async (input) => {
   const state = await createRuntimeState(input);
@@ -59,6 +84,10 @@ const plugin: Plugin = async (input) => {
       const query = await getLastUserText(eventInput.sessionID, input.client);
       if (!query) return;
 
+      const taskType = detectTaskType(query);
+      const categoryWeights = getCategoryWeights(taskType, state.config.injection.taskTypeProfiles);
+      const profile = state.config.injection.taskTypeProfiles[taskType];
+
       const activeScope = deriveProjectScope(input.worktree);
       const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
 
@@ -74,7 +103,7 @@ const plugin: Plugin = async (input) => {
         query,
         queryVector,
         scopes,
-        limit: state.config.injection.maxMemories * 2, // Fetch more than needed for filtering
+        limit: profile.maxMemories * 2,
         vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
         bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
         minScore: Math.max(state.config.retrieval.minScore, state.config.injection.injectionFloor),
@@ -85,10 +114,15 @@ const plugin: Plugin = async (input) => {
         globalDiscountFactor: state.config.globalDiscountFactor,
       });
 
+      const weightedResults = results.map((r) => {
+        const categoryWeight = categoryWeights[r.record.category] ?? 1.0;
+        return { ...r, score: r.score * categoryWeight };
+      }).sort((a, b) => b.score - a.score);
+
       state.lastRecall = {
         timestamp: Date.now(),
         query,
-        results: results.map((r) => ({
+        results: weightedResults.map((r) => ({
           memoryId: r.record.id,
           score: r.score,
           factors: {
@@ -102,7 +136,7 @@ const plugin: Plugin = async (input) => {
       };
 
       // Extract preference signals from memories
-      const allSignals = results.map((r) => extractPreferenceSignals(r.record)).flat();
+      const allSignals = weightedResults.map((r) => extractPreferenceSignals(r.record)).flat();
       const projectSignals = allSignals.filter((s) => !activeScope.startsWith("global"));
       const globalSignals = allSignals.filter((s) => activeScope.startsWith("global"));
 
@@ -112,13 +146,18 @@ const plugin: Plugin = async (input) => {
 
       const preferenceInjection = buildPreferenceInjection(effectivePreferences, {
         mode: state.config.injection.mode === "adaptive" ? "fixed" : state.config.injection.mode,
-        maxMemories: state.config.injection.maxMemories,
+        maxMemories: profile.maxMemories,
         tokenBudget: 300,
       });
 
       // Apply injection control
-      const injectionLimit = calculateInjectionLimit(results, state.config.injection);
-      const limitedResults = results.slice(0, injectionLimit);
+      const injectionLimit = calculateInjectionLimit(weightedResults, {
+        ...state.config.injection,
+        maxMemories: profile.maxMemories,
+        budgetTokens: profile.budgetTokens,
+        summaryTargetChars: profile.summaryTargetChars,
+      });
+      const limitedResults = weightedResults.slice(0, injectionLimit);
 
       await state.store.putEvent({
         id: generateId(),
@@ -208,6 +247,9 @@ const plugin: Plugin = async (input) => {
           const activeScope = args.scope ?? deriveProjectScope(context.worktree);
           const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
 
+          const taskType = detectTaskType(args.query);
+          const categoryWeights = getCategoryWeights(taskType, state.config.injection.taskTypeProfiles);
+
           let queryVector: number[] = [];
           try {
             queryVector = await state.embedder.embed(args.query);
@@ -230,10 +272,15 @@ const plugin: Plugin = async (input) => {
             globalDiscountFactor: state.config.globalDiscountFactor,
           });
 
+          const weightedResults = results.map((r) => {
+            const categoryWeight = categoryWeights[r.record.category] ?? 1.0;
+            return { ...r, score: r.score * categoryWeight };
+          }).sort((a, b) => b.score - a.score);
+
           state.lastRecall = {
             timestamp: Date.now(),
             query: args.query,
-            results: results.map((r) => ({
+            results: weightedResults.map((r) => ({
               memoryId: r.record.id,
               score: r.score,
               factors: {

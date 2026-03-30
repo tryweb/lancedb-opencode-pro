@@ -189,6 +189,38 @@ function resolveInjectionConfig(
       preserveComments: toBoolean(codeSummarizationRaw.preserveComments, true),
       preserveImports: toBoolean(codeSummarizationRaw.preserveImports, false),
     },
+    taskTypeProfiles: {
+      coding: {
+        maxMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_CODING_MAX_MEMORIES, 4))),
+        budgetTokens: Math.max(256, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_CODING_BUDGET_TOKENS, 5120))),
+        summaryTargetChars: Math.max(50, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_CODING_SUMMARY_CHARS, 400))),
+        categoryWeights: { decision: 1.5, entity: 1.2, fact: 1.0, preference: 0.8, other: 0.5 },
+      },
+      documentation: {
+        maxMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_DOCS_MAX_MEMORIES, 3))),
+        budgetTokens: Math.max(256, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_DOCS_BUDGET_TOKENS, 3072))),
+        summaryTargetChars: Math.max(50, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_DOCS_SUMMARY_CHARS, 500))),
+        categoryWeights: { decision: 1.4, fact: 1.3, entity: 1.2, preference: 0.8, other: 0.5 },
+      },
+      review: {
+        maxMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_REVIEW_MAX_MEMORIES, 3))),
+        budgetTokens: Math.max(256, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_REVIEW_BUDGET_TOKENS, 4096))),
+        summaryTargetChars: Math.max(50, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_REVIEW_SUMMARY_CHARS, 300))),
+        categoryWeights: { preference: 1.4, decision: 1.2, entity: 1.0, fact: 0.9, other: 0.5 },
+      },
+      release: {
+        maxMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_RELEASE_MAX_MEMORIES, 4))),
+        budgetTokens: Math.max(256, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_RELEASE_BUDGET_TOKENS, 6144))),
+        summaryTargetChars: Math.max(50, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_RELEASE_SUMMARY_CHARS, 350))),
+        categoryWeights: { decision: 1.5, entity: 1.3, fact: 1.2, preference: 0.8, other: 0.5 },
+      },
+      general: {
+        maxMemories: Math.max(1, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_GENERAL_MAX_MEMORIES, 3))),
+        budgetTokens: Math.max(256, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_GENERAL_BUDGET_TOKENS, 4096))),
+        summaryTargetChars: Math.max(50, Math.floor(toNumber(env.LANCEDB_OPENCODE_PRO_INJECTION_GENERAL_SUMMARY_CHARS, 300))),
+        categoryWeights: { decision: 1.3, fact: 1.0, entity: 1.0, preference: 0.9, other: 0.5 },
+      },
+    },
   };
 }
 
