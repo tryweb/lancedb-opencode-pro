@@ -74,7 +74,7 @@ const plugin: Plugin = async (input) => {
         query,
         queryVector,
         scopes,
-        limit: state.config.injection.maxMemories * 2, // Fetch more than needed for filtering
+        limit: state.config.injection.maxMemories * 2,
         vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
         bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
         minScore: Math.max(state.config.retrieval.minScore, state.config.injection.injectionFloor),
@@ -82,6 +82,7 @@ const plugin: Plugin = async (input) => {
         recencyBoost: state.config.retrieval.recencyBoost,
         recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
         importanceWeight: state.config.retrieval.importanceWeight,
+        feedbackWeight: state.config.retrieval.feedbackWeight,
         globalDiscountFactor: state.config.globalDiscountFactor,
       });
 
@@ -227,6 +228,7 @@ const plugin: Plugin = async (input) => {
             recencyBoost: state.config.retrieval.recencyBoost,
             recencyHalfLifeHours: state.config.retrieval.recencyHalfLifeHours,
             importanceWeight: state.config.retrieval.importanceWeight,
+            feedbackWeight: state.config.retrieval.feedbackWeight,
             globalDiscountFactor: state.config.globalDiscountFactor,
           });
 
