@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Learning Dashboard** (`learning-dashboard-summary`, user-facing):
+  - `memory_dashboard`: weekly learning effectiveness summary with trend indicators
+  - Aggregates capture, recall, and feedback metrics for a configurable time window (1-90 days)
+  - Week-over-week trend indicators (improving/stable/declining/insufficient-data) with minimum sample threshold
+  - Rule-based actionable insights (low recall hit rate, high skip rate, low helpful rate)
+  - Recent memory breakdown by category with sample previews
+  - `DashboardSummary`, `TrendIndicator`, `TrendDirection` data model in `src/types.ts`
+
+---
+
 ## [0.5.0] - 2026-03-29
 
 ### Added

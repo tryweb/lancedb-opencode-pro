@@ -566,6 +566,24 @@ memory_effectiveness [scope="project:my-project"]
 
 **輸出範例**: [../README.md#viewing-metrics](../README.md#viewing-metrics)
 
+#### `memory_dashboard`
+
+顯示週學習儀表板，包含趨勢指標與洞察建議。
+
+```text
+memory_dashboard [days=7] [scope="project:my-project"]
+```
+
+**參數**:
+- `days` (1-90): 儀表板時間窗口。預設: 7。
+- `scope`: 限定範圍。預設: 當前專案。
+
+**輸出內容**:
+- 當期捕獲/召回/回饋指標
+- 週對週趨勢指標 (improving/stable/declining/insufficient-data)
+- 學習品質的可行洞察
+- 近期記憶的分類彙整
+
 ### 範圍管理工具 (v0.2.0+)
 
 #### `memory_scope_promote`

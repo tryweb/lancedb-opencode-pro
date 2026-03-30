@@ -440,6 +440,20 @@ const plugin: Plugin = async (input) => {
           return JSON.stringify(summary, null, 2);
         },
       }),
+      memory_dashboard: tool({
+        description: "Show weekly learning dashboard with trends and insights",
+        args: {
+          days: tool.schema.number().int().min(1).max(90).default(7),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          const scope = args.scope ?? deriveProjectScope(context.worktree);
+          const dashboard = await state.store.getWeeklyEffectivenessSummary(scope, state.config.includeGlobalScope, args.days);
+          return JSON.stringify(dashboard, null, 2);
+        },
+      }),
       memory_scope_promote: tool({
         description: "Promote a memory from project scope to global scope for cross-project sharing",
         args: {
