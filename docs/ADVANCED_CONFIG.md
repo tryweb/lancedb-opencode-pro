@@ -565,6 +565,24 @@ memory_effectiveness [scope="project:my-project"]
 
 **Example output**: [../README.md#viewing-metrics](../README.md#viewing-metrics)
 
+#### `memory_dashboard`
+
+Show weekly learning dashboard with trends and insights.
+
+```text
+memory_dashboard [days=7] [scope="project:my-project"]
+```
+
+**Parameters**:
+- `days` (1-90): Time window for dashboard. Default: 7.
+- `scope`: Filter to a specific scope. Default: current project.
+
+**Output includes**:
+- Current period capture/recall/feedback metrics
+- Week-over-week trend indicators (improving/stable/declining/insufficient-data)
+- Actionable insights for learning quality
+- Recent memory breakdown by category
+
 #### `memory_kpi`
 
 Show learning KPI metrics (retry-to-success rate and memory lift).

@@ -284,6 +284,38 @@ async function run() {
 
     console.log("E2E PASS: memory explanation tools verified.");
 
+  // === Memory Dashboard E2E Tests ===
+  console.log("Running memory dashboard E2E tests...");
+
+  // Test memory_dashboard with default days
+  const dashboardDefault = await hooks.tool.memory_dashboard.execute({ days: 7 }, ctx);
+  const dashboardParsed = JSON.parse(dashboardDefault);
+  assert(dashboardParsed.scope !== undefined, "dashboard should include scope");
+  assert(dashboardParsed.periodDays === 7, "dashboard should have periodDays=7");
+  assert(dashboardParsed.current !== undefined, "dashboard should include current period metrics");
+  assert(dashboardParsed.trends !== undefined, "dashboard should include trends");
+  assert(dashboardParsed.trends.captureSuccessRate !== undefined, "dashboard should include capture trend");
+  assert(dashboardParsed.trends.recallHitRate !== undefined, "dashboard should include recall trend");
+  assert(dashboardParsed.trends.feedbackHelpfulRate !== undefined, "dashboard should include feedback trend");
+  assert(Array.isArray(dashboardParsed.insights), "dashboard should include insights array");
+  assert(dashboardParsed.recentMemories !== undefined, "dashboard should include recentMemories");
+  console.log("  - memory_dashboard (default): PASS");
+
+  // Test memory_dashboard with custom days
+  const dashboard14d = await hooks.tool.memory_dashboard.execute({ days: 14 }, ctx);
+  const dashboard14dParsed = JSON.parse(dashboard14d);
+  assert(dashboard14dParsed.periodDays === 14, "dashboard should have periodDays=14");
+  assert(dashboard14dParsed.currentPeriodStart < dashboard14dParsed.currentPeriodEnd, "current period should be valid");
+  console.log("  - memory_dashboard (days=14): PASS");
+
+  // Test memory_dashboard with empty events should return insufficient-data trends
+  const dashboardEmpty = await hooks.tool.memory_dashboard.execute({ days: 1, scope: "project:nonexistent" }, ctx);
+  const dashboardEmptyParsed = JSON.parse(dashboardEmpty);
+  assert(dashboardEmptyParsed.trends.captureSuccessRate.direction === "insufficient-data", "empty dashboard should show insufficient-data for trends");
+  console.log("  - memory_dashboard (empty scope): PASS");
+
+  console.log("E2E PASS: memory dashboard tools verified.");
+
   // === Memory KPI E2E Tests ===
   console.log("Running memory KPI E2E tests...");
 

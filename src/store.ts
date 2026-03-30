@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { CaptureSkipReason, CitationSource, CitationStatus, EffectivenessSummary, EpisodicTaskRecord, LastRecallSession, MemoryEffectivenessEvent, MemoryExplanation, MemoryRecord, RecallFactors, RecallSource, SearchResult, SuccessPattern, TaskState, ValidationOutcome } from "./types.js";
+import type { CaptureSkipReason, CitationSource, CitationStatus, DashboardSummary, EffectivenessSummary, EpisodicTaskRecord, LastRecallSession, MemoryCategory, MemoryEffectivenessEvent, MemoryExplanation, MemoryRecord, RecallFactors, RecallSource, SearchResult, SuccessPattern, TaskState, TrendDirection, ValidationOutcome } from "./types.js";
 import { validateEpisodicRecord, validateEpisodicRecordArray } from "./types.js";
 import { cosineSimilarity, generateId, tokenize } from "./utils.js";
 
@@ -765,6 +765,227 @@ export class MemoryStore {
         consolidatedCount,
       },
     };
+  }
+
+  async getWeeklyEffectivenessSummary(
+    scope: string,
+    includeGlobalScope: boolean,
+    days: number = 7,
+  ): Promise<DashboardSummary> {
+    const scopes = includeGlobalScope && scope !== "global" ? [scope, "global"] : [scope];
+    const allEvents = await this.readEventsByScopes(scopes);
+    const allMemories = await this.readByScopesIncludingMerged(scopes);
+
+    const now = Date.now();
+    const periodMs = days * 24 * 60 * 60 * 1000;
+    const currentPeriodStart = now - periodMs;
+    const previousPeriodStart = currentPeriodStart - periodMs;
+
+    const currentEvents = allEvents.filter((e) => e.timestamp >= currentPeriodStart);
+    const previousEvents = allEvents.filter((e) => e.timestamp >= previousPeriodStart && e.timestamp < currentPeriodStart);
+
+    const current = this.aggregateEvents(scope, currentEvents, allMemories);
+    const previous = previousEvents.length > 0 ? this.aggregateEvents(scope, previousEvents, []) : null;
+
+    const trends = {
+      captureSuccessRate: this.calculateTrend(current.capture.successRate, previous?.capture.successRate, currentEvents.length, previousEvents.length),
+      recallHitRate: this.calculateTrend(current.recall.hitRate, previous?.recall.hitRate, currentEvents.length, previousEvents.length),
+      feedbackHelpfulRate: this.calculateTrend(current.feedback.useful.helpfulRate, previous?.feedback.useful.helpfulRate, currentEvents.length, previousEvents.length),
+    };
+
+    const insights = this.generateInsights(current);
+
+    const recentMemories = allMemories.filter((m) => m.timestamp >= currentPeriodStart);
+    const byCategory: Partial<Record<MemoryCategory, { count: number; samples: string[] }>> = {};
+    for (const mem of recentMemories) {
+      const cat = mem.category ?? "other";
+      if (!byCategory[cat]) {
+        byCategory[cat] = { count: 0, samples: [] };
+      }
+      byCategory[cat]!.count += 1;
+      if (byCategory[cat]!.samples.length < 3) {
+        byCategory[cat]!.samples.push(mem.text.slice(0, 60));
+      }
+    }
+
+    return {
+      scope,
+      periodDays: days,
+      currentPeriodStart,
+      currentPeriodEnd: now,
+      previousPeriodStart,
+      previousPeriodEnd: currentPeriodStart,
+      current,
+      previous,
+      trends,
+      insights,
+      recentMemories: {
+        total: recentMemories.length,
+        byCategory,
+      },
+    };
+  }
+
+  private aggregateEvents(scope: string, events: MemoryEffectivenessEvent[], memories: MemoryRecord[]): EffectivenessSummary {
+    const captureSkipReasons: Partial<Record<CaptureSkipReason, number>> = {};
+    let captureConsidered = 0;
+    let captureStored = 0;
+    let captureSkipped = 0;
+    let recallRequested = 0;
+    let recallInjected = 0;
+    let recallReturnedResults = 0;
+    let autoRecallRequested = 0;
+    let autoRecallInjected = 0;
+    let autoRecallReturnedResults = 0;
+    let manualRecallRequested = 0;
+    let manualRecallReturnedResults = 0;
+    let feedbackMissing = 0;
+    let feedbackWrong = 0;
+    let feedbackUsefulPositive = 0;
+    let feedbackUsefulNegative = 0;
+
+    for (const event of events) {
+      if (event.type === "capture") {
+        if (event.outcome === "considered") captureConsidered += 1;
+        if (event.outcome === "stored") captureStored += 1;
+        if (event.outcome === "skipped") {
+          captureSkipped += 1;
+          if (event.skipReason) {
+            captureSkipReasons[event.skipReason] = (captureSkipReasons[event.skipReason] ?? 0) + 1;
+          }
+        }
+      }
+
+      if (event.type === "recall") {
+        recallRequested += 1;
+        if (event.resultCount > 0) recallReturnedResults += 1;
+        if (event.injected) recallInjected += 1;
+        const recallSource = event.source ?? "system-transform";
+        if (recallSource === "manual-search") {
+          manualRecallRequested += 1;
+          if (event.resultCount > 0) manualRecallReturnedResults += 1;
+        } else {
+          autoRecallRequested += 1;
+          if (event.resultCount > 0) autoRecallReturnedResults += 1;
+          if (event.injected) autoRecallInjected += 1;
+        }
+      }
+
+      if (event.type === "feedback") {
+        if (event.feedbackType === "missing") feedbackMissing += 1;
+        if (event.feedbackType === "wrong") feedbackWrong += 1;
+        if (event.feedbackType === "useful") {
+          if (event.helpful) feedbackUsefulPositive += 1;
+          else feedbackUsefulNegative += 1;
+        }
+      }
+    }
+
+    const totalCaptureAttempts = captureStored + captureSkipped;
+    const totalUsefulFeedback = feedbackUsefulPositive + feedbackUsefulNegative;
+
+    const flaggedCount = memories.filter((r) => {
+      const meta = parseMetadata(r.metadataJson);
+      return meta.isPotentialDuplicate === true;
+    }).length;
+    const consolidatedCount = memories.filter((r) => {
+      const meta = parseMetadata(r.metadataJson);
+      return meta.status === "merged";
+    }).length;
+
+    return {
+      scope,
+      totalEvents: events.length,
+      capture: {
+        considered: captureConsidered,
+        stored: captureStored,
+        skipped: captureSkipped,
+        successRate: totalCaptureAttempts === 0 ? 0 : captureStored / totalCaptureAttempts,
+        skipReasons: captureSkipReasons,
+      },
+      recall: {
+        requested: recallRequested,
+        injected: recallInjected,
+        returnedResults: recallReturnedResults,
+        hitRate: recallRequested === 0 ? 0 : recallReturnedResults / recallRequested,
+        injectionRate: recallRequested === 0 ? 0 : recallInjected / recallRequested,
+        auto: {
+          requested: autoRecallRequested,
+          injected: autoRecallInjected,
+          returnedResults: autoRecallReturnedResults,
+          hitRate: autoRecallRequested === 0 ? 0 : autoRecallReturnedResults / autoRecallRequested,
+          injectionRate: autoRecallRequested === 0 ? 0 : autoRecallInjected / autoRecallRequested,
+        },
+        manual: {
+          requested: manualRecallRequested,
+          returnedResults: manualRecallReturnedResults,
+          hitRate: manualRecallRequested === 0 ? 0 : manualRecallReturnedResults / manualRecallRequested,
+        },
+        manualRescueRatio: autoRecallRequested === 0 ? 0 : manualRecallRequested / autoRecallRequested,
+      },
+      feedback: {
+        missing: feedbackMissing,
+        wrong: feedbackWrong,
+        useful: {
+          positive: feedbackUsefulPositive,
+          negative: feedbackUsefulNegative,
+          helpfulRate: totalUsefulFeedback === 0 ? 0 : feedbackUsefulPositive / totalUsefulFeedback,
+        },
+        falsePositiveRate: captureStored === 0 ? 0 : feedbackWrong / captureStored,
+        falseNegativeRate: totalCaptureAttempts === 0 ? 0 : feedbackMissing / totalCaptureAttempts,
+      },
+      duplicates: {
+        flaggedCount,
+        consolidatedCount,
+      },
+    };
+  }
+
+  private calculateTrend(current: number, previous: number | undefined, currentSamples: number, previousSamples: number): { direction: TrendDirection; percentageChange: number } {
+    const MIN_SAMPLES = 5;
+    if (previous === undefined || currentSamples < MIN_SAMPLES || previousSamples < MIN_SAMPLES) {
+      return { direction: "insufficient-data", percentageChange: 0 };
+    }
+
+    if (previous === 0) {
+      return current > 0
+        ? { direction: "improving", percentageChange: 100 }
+        : { direction: "stable", percentageChange: 0 };
+    }
+
+    const pctChange = ((current - previous) / previous) * 100;
+    if (Math.abs(pctChange) <= 5) {
+      return { direction: "stable", percentageChange: Math.round(pctChange * 10) / 10 };
+    }
+    const direction: TrendDirection = pctChange > 0 ? "improving" : "declining";
+    return { direction, percentageChange: Math.round(pctChange * 10) / 10 };
+  }
+
+  private generateInsights(summary: EffectivenessSummary): string[] {
+    const insights: string[] = [];
+
+    if (summary.recall.requested > 0 && summary.recall.hitRate < 0.5) {
+      insights.push("Consider refining memory capture quality or query specificity");
+    }
+
+    if (summary.capture.considered > 0) {
+      const skipRate = summary.capture.skipped / (summary.capture.stored + summary.capture.skipped);
+      if (skipRate > 0.5) {
+        insights.push("High skip rate may indicate duplicate content or embedding issues");
+      }
+    }
+
+    if (summary.feedback.useful.positive + summary.feedback.useful.negative > 0) {
+      if (summary.feedback.useful.helpfulRate < 0.7) {
+        insights.push("Memory quality could improve with more explicit feedback");
+      }
+    }
+
+    if (insights.length === 0) {
+      insights.push("Learning effectiveness is within healthy ranges");
+    }
+
+    return insights;
   }
 
   getIndexHealth(): { vector: boolean; fts: boolean; ftsError?: string } {

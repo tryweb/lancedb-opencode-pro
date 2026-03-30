@@ -102,6 +102,7 @@ That's it! OpenCode will now automatically capture key decisions and inject them
 | `memory_remember` | Manually store a memory | [Doc](docs/ADVANCED_CONFIG.md#memory_remember) |
 | `memory_forget` | Remove or disable a memory | [Doc](docs/ADVANCED_CONFIG.md#memory_forget) |
 | `memory_what_did_you_learn` | Show recent learning summaries | [Doc](docs/ADVANCED_CONFIG.md#memory_what_did_you_learn) |
+| `memory_dashboard` | Weekly learning dashboard with trends | [Doc](docs/ADVANCED_CONFIG.md#memory_dashboard) |
 
 *(For full details on tools like **Effectiveness Feedback**, **Cross-Project Sharing**, **Deduplication**, **Citations**, and **Episodic Learning**, please refer to the [Advanced Configuration](docs/ADVANCED_CONFIG.md).)*
 
