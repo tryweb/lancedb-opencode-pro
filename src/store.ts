@@ -1416,6 +1416,86 @@ export class MemoryStore {
     return suggestions;
   }
 
+  async calculateRetryToSuccessRate(scope: string, days: number = 30): Promise<{ status: "ok" | "insufficient-data" | "no-failed-tasks"; rate: number; totalFailedTasks: number; succeededAfterRetry: number; sampleCount: number }> {
+    const sinceTimestamp = Date.now() - days * 24 * 60 * 60 * 1000;
+    const failedTasks = await this.queryTaskEpisodes(scope, "failed", sinceTimestamp);
+    const successTasks = await this.queryTaskEpisodes(scope, "success", sinceTimestamp);
+
+    if (failedTasks.length === 0) {
+      return { status: "no-failed-tasks", rate: 0, totalFailedTasks: 0, succeededAfterRetry: 0, sampleCount: 0 };
+    }
+
+    const totalFailed = failedTasks.length;
+    const succeededAfterRetry = successTasks.filter((t) => {
+      const retries = JSON.parse(t.retryAttemptsJson || "[]") as Array<{ outcome: string }>;
+      return retries.some((r) => r.outcome === "success");
+    }).length;
+
+    const sampleCount = totalFailed + succeededAfterRetry;
+    if (sampleCount < 5) {
+      return { status: "insufficient-data", rate: 0, totalFailedTasks: totalFailed, succeededAfterRetry, sampleCount };
+    }
+
+    const rate = totalFailed > 0 ? succeededAfterRetry / totalFailed : 0;
+    return { status: "ok", rate, totalFailedTasks: totalFailed, succeededAfterRetry, sampleCount };
+  }
+
+  async calculateMemoryLift(scope: string, days: number = 30): Promise<{ status: "ok" | "insufficient-data" | "no-recall-data"; lift: number; successRateWithRecall: number; successRateWithoutRecall: number; withRecallCount: number; withoutRecallCount: number }> {
+    const sinceTimestamp = Date.now() - days * 24 * 60 * 60 * 1000;
+    const allTasks = await this.queryTaskEpisodes(scope, undefined, sinceTimestamp);
+
+    const withRecall: Array<{ success: boolean }> = [];
+    const withoutRecall: Array<{ success: boolean }> = [];
+
+    for (const task of allTasks) {
+      const usedRecall = this.taskUsedRecall(task);
+      const isSuccess = task.state === "success";
+      if (usedRecall) {
+        withRecall.push({ success: isSuccess });
+      } else {
+        withoutRecall.push({ success: isSuccess });
+      }
+    }
+
+    if (withRecall.length === 0) {
+      return { status: "no-recall-data", lift: 0, successRateWithRecall: 0, successRateWithoutRecall: 0, withRecallCount: 0, withoutRecallCount: withoutRecall.length };
+    }
+
+    if (withRecall.length < 5 || withoutRecall.length < 5) {
+      return { status: "insufficient-data", lift: 0, successRateWithRecall: 0, successRateWithoutRecall: 0, withRecallCount: withRecall.length, withoutRecallCount: withoutRecall.length };
+    }
+
+    const rateWith = withRecall.filter((t) => t.success).length / withRecall.length;
+    const rateWithout = withoutRecall.length > 0 ? withoutRecall.filter((t) => t.success).length / withoutRecall.length : 0;
+    const lift = rateWithout > 0 ? (rateWith - rateWithout) / rateWithout : 0;
+
+    return { status: "ok", lift, successRateWithRecall: rateWith, successRateWithoutRecall: rateWithout, withRecallCount: withRecall.length, withoutRecallCount: withoutRecall.length };
+  }
+
+  private taskUsedRecall(task: EpisodicTaskRecord): boolean {
+    const metadata = parseMetadata(task.metadataJson);
+    if (metadata.recallUsed === true) return true;
+
+    try {
+      const outcomes = JSON.parse(task.validationOutcomesJson || "[]") as Array<{ type?: string }>;
+      return outcomes.some((o) => o.type === "recall");
+    } catch {
+      return false;
+    }
+  }
+
+  async getKpiSummary(scope: string, days: number = 30): Promise<import("./types.js").KpiSummary> {
+    const retryToSuccess = await this.calculateRetryToSuccessRate(scope, days);
+    const memoryLift = await this.calculateMemoryLift(scope, days);
+
+    return {
+      scope,
+      periodDays: days,
+      retryToSuccess,
+      memoryLift,
+    };
+  }
+
   async readEventsByScopes(scopes: string[]): Promise<MemoryEffectivenessEvent[]> {
     const table = this.requireEventTable();
     if (scopes.length === 0) return [];

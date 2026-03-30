@@ -316,6 +316,32 @@ async function run() {
 
   console.log("E2E PASS: memory dashboard tools verified.");
 
+  // === Memory KPI E2E Tests ===
+  console.log("Running memory KPI E2E tests...");
+
+  const kpiDefault = await hooks.tool.memory_kpi.execute({ days: 30 }, ctx);
+  const kpiParsed = JSON.parse(kpiDefault);
+  assert(kpiParsed.scope !== undefined, "kpi should include scope");
+  assert(kpiParsed.periodDays === 30, "kpi should have periodDays=30");
+  assert(kpiParsed.retryToSuccess !== undefined, "kpi should include retryToSuccess");
+  assert(kpiParsed.retryToSuccess.status !== undefined, "retryToSuccess should have status");
+  assert(kpiParsed.memoryLift !== undefined, "kpi should include memoryLift");
+  assert(kpiParsed.memoryLift.status !== undefined, "memoryLift should have status");
+  console.log("  - memory_kpi (default): PASS");
+
+  const kpi7d = await hooks.tool.memory_kpi.execute({ days: 7 }, ctx);
+  const kpi7dParsed = JSON.parse(kpi7d);
+  assert(kpi7dParsed.periodDays === 7, "kpi should have periodDays=7");
+  console.log("  - memory_kpi (days=7): PASS");
+
+  const kpiEmpty = await hooks.tool.memory_kpi.execute({ days: 1, scope: "project:nonexistent" }, ctx);
+  const kpiEmptyParsed = JSON.parse(kpiEmpty);
+  assert(kpiEmptyParsed.retryToSuccess.status === "no-failed-tasks", "empty kpi should show no-failed-tasks");
+  assert(kpiEmptyParsed.memoryLift.status === "no-recall-data", "empty kpi should show no-recall-data");
+  console.log("  - memory_kpi (empty scope): PASS");
+
+  console.log("E2E PASS: memory KPI tools verified.");
+
     console.log("E2E PASS: memory explanation tools verified.");
   } finally {
     await mock.close();

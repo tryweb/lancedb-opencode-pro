@@ -583,6 +583,24 @@ memory_dashboard [days=7] [scope="project:my-project"]
 - Actionable insights for learning quality
 - Recent memory breakdown by category
 
+#### `memory_kpi`
+
+Show learning KPI metrics (retry-to-success rate and memory lift).
+
+```text
+memory_kpi [days=30] [scope="project:my-project"]
+```
+
+**Parameters**:
+- `days` (1-365): Time window for KPI calculation. Default: 30.
+- `scope`: Filter to a specific scope. Default: current project.
+
+**Metrics**:
+- **Retry-to-success rate**: (tasks succeeded after retries) / (total failed tasks)
+- **Memory lift**: (success_rate_with_recall - success_rate_without_recall) / success_rate_without_recall
+
+**Status values**: `ok`, `insufficient-data` (< 5 samples), `no-failed-tasks`, `no-recall-data`
+
 ### Scope Management Tools (v0.2.0+)
 
 #### `memory_scope_promote`

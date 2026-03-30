@@ -18,6 +18,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
   - Recent memory breakdown by category with sample previews
   - `DashboardSummary`, `TrendIndicator`, `TrendDirection` data model in `src/types.ts`
 
+- **Learning KPI Pipeline** (`learning-kpi-pipeline`, user-facing):
+  - `memory_kpi`: query learning effectiveness KPIs (retry-to-success rate, memory lift)
+  - `calculateRetryToSuccessRate()`: retry-to-success metric from episodic task data
+  - `calculateMemoryLift()`: lift metric comparing success rates with/without recall
+  - `RetryToSuccessMetric`, `MemoryLiftMetric`, `KpiSummary` data model in `src/types.ts`
+
 ---
 
 ## [0.5.0] - 2026-03-29
