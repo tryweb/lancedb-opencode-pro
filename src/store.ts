@@ -1,8 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { CaptureSkipReason, CitationSource, CitationStatus, EffectivenessSummary, EpisodicTaskRecord, LastRecallSession, MemoryEffectivenessEvent, MemoryExplanation, MemoryRecord, RecallFactors, RecallSource, SearchResult, SuccessPattern, TaskState, ValidationOutcome } from "./types.js";
-import { generateId } from "./utils.js";
-import { cosineSimilarity, tokenize } from "./utils.js";
+import { validateEpisodicRecord, validateEpisodicRecordArray } from "./types.js";
+import { cosineSimilarity, generateId, tokenize } from "./utils.js";
 
 type LanceModule = typeof import("@lancedb/lancedb");
 
@@ -897,7 +897,7 @@ export class MemoryStore {
       .where(`taskId = '${escapeSql(taskId)}' AND scope = '${escapeSql(scope)}'`)
       .toArray();
     if (rows.length === 0) return null;
-    return rows[0] as unknown as EpisodicTaskRecord;
+    return validateEpisodicRecord(rows[0]);
   }
 
   async queryTaskEpisodes(scope: string, state?: TaskState, sinceTimestamp?: number): Promise<EpisodicTaskRecord[]> {
@@ -911,7 +911,7 @@ export class MemoryStore {
       whereClause += ` AND startTime >= ${sinceTimestamp}`;
     }
     const rows = await table.query().where(whereClause).toArray();
-    return rows as unknown as EpisodicTaskRecord[];
+    return validateEpisodicRecordArray(rows);
   }
 
   /**
@@ -933,7 +933,7 @@ export class MemoryStore {
     const rows = await table.query().where(`taskId = '${escapeSql(taskId)}' AND scope = '${escapeSql(scope)}'`).toArray();
     if (rows.length === 0) return false;
 
-    const existing = rows[0] as unknown as EpisodicTaskRecord;
+    const existing = validateEpisodicRecord(rows[0]);
     const items: T[] = parser(fieldAccessor(existing) || "[]");
     const enrichedItem = itemEnricher ? itemEnricher(newItem) : newItem;
     items.push(enrichedItem);
@@ -996,7 +996,7 @@ export class MemoryStore {
     await this.ensureEpisodicTaskTable(384);
     const table = this.requireEpisodicTaskTable();
     const rows = await table.query().where(`scope = '${escapeSql(scope)}' AND state = 'success'`).toArray();
-    const episodes = rows as unknown as EpisodicTaskRecord[];
+    const episodes = validateEpisodicRecordArray(rows);
 
     // Vector similarity if query vector provided
     if (queryVector && queryVector.length > 0) {
@@ -1017,10 +1017,10 @@ export class MemoryStore {
     const keywords = taskDescription.toLowerCase().split(/\s+/).filter((k) => k.length > 2);
 
     const scored = episodes.map((ep) => {
-      const metadata = JSON.parse(ep.metadataJson || "{}");
-      const description = (metadata.description || "").toLowerCase();
+      const metadata = (JSON.parse(ep.metadataJson || "{}")) as Record<string, unknown>;
+      const description = ((metadata.description as string) || "").toLowerCase();
       const taskId = ep.taskId.toLowerCase();
-      const commands = JSON.parse(ep.commandsJson || "[]").join(" ").toLowerCase();
+      const commands = (JSON.parse(ep.commandsJson || "[]") as string[]).join(" ").toLowerCase();
 
       const text = `${taskId} ${description} ${commands}`;
       let matchCount = 0;
@@ -1041,7 +1041,7 @@ export class MemoryStore {
     await this.ensureEpisodicTaskTable(384);
     const table = this.requireEpisodicTaskTable();
     const rows = await table.query().where(`scope = '${escapeSql(scope)}' AND state = 'success'`).toArray();
-    const episodes = rows as unknown as EpisodicTaskRecord[];
+    const episodes = validateEpisodicRecordArray(rows);
 
     const commandSequenceCount = new Map<string, number>();
     const toolCount = new Map<string, number>();
@@ -1112,7 +1112,7 @@ export class MemoryStore {
     await this.ensureEpisodicTaskTable(384);
     const table = this.requireEpisodicTaskTable();
     const rows = await table.query().where(`scope = '${escapeSql(scope)}' AND state = 'failed'`).toArray();
-    const failedEpisodes = rows as unknown as EpisodicTaskRecord[];
+    const failedEpisodes = validateEpisodicRecordArray(rows);
 
     if (failedEpisodes.length < minSamples) {
       return null;
@@ -1123,7 +1123,7 @@ export class MemoryStore {
     const firstError = failedEpisodes[0]?.errorMessage;
 
     for (const ep of failedEpisodes) {
-      const attempts = JSON.parse(ep.retryAttemptsJson || "[]");
+      const attempts = ep.retryAttemptsJson;
       retryCounts.push(attempts.length);
 
       if (ep.errorMessage === firstError && attempts.length > 0) {
@@ -1158,10 +1158,10 @@ export class MemoryStore {
     const suggestions: { strategy: string; reason: string; confidence: number; basedOnTask?: string }[] = [];
 
     const failedRows = await table.query().where(`scope = '${escapeSql(scope)}' AND state = 'failed'`).toArray();
-    const failedEpisodes = failedRows as unknown as EpisodicTaskRecord[];
+    const failedEpisodes = validateEpisodicRecordArray(failedRows);
 
     const successRows = await table.query().where(`scope = '${escapeSql(scope)}' AND state = 'success'`).toArray();
-    const successEpisodes = successRows as unknown as EpisodicTaskRecord[];
+    const successEpisodes = validateEpisodicRecordArray(successRows);
 
     if (failedEpisodes.length >= 3 && successEpisodes.length > 0) {
       const failedTaskIds = failedEpisodes.map(e => e.taskId);
@@ -1171,7 +1171,7 @@ export class MemoryStore {
       });
 
       if (similarSuccess) {
-        const commands = JSON.parse(similarSuccess.commandsJson || "[]");
+        const commands = similarSuccess.commandsJson;
         if (commands.length > 0) {
           suggestions.push({
             strategy: `Try: ${commands[0]}`,

@@ -10,6 +10,7 @@ import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } 
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
 import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, LastRecallSession, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, ValidationOutcome, ValidationType } from "./types.js";
+import { validateEpisodicRecordArray } from "./types.js";
 import { generateId } from "./utils.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 
@@ -175,8 +176,8 @@ const plugin: Plugin = async (input) => {
         const similarTasks = await state.store.findSimilarTasks(activeScope, query, 0.85, queryVector);
         if (similarTasks.length > 0) {
           const taskContext = similarTasks.slice(0, 2).map((ep) => {
-            const commands = JSON.parse(ep.commandsJson || "[]");
-            const outcomes = JSON.parse(ep.validationOutcomesJson || "[]");
+            const commands = JSON.parse(ep.commandsJson || "[]") as string[];
+            const outcomes = JSON.parse(ep.validationOutcomesJson || "[]") as ValidationOutcome[];
             const passed = outcomes.filter((o: ValidationOutcome) => o.status === "pass").length;
             const total = outcomes.length;
             return `Similar task: ${ep.taskId} (${ep.state}) - Commands: ${commands.slice(0, 3).join(" → ")} - Validations: ${passed}/${total} passed`;
@@ -969,7 +970,7 @@ ${recentSamples}
 
           const limited = episodes.slice(0, args.limit);
           return limited.map((ep) => {
-            const meta = JSON.parse(ep.metadataJson || "{}");
+            const meta = (JSON.parse(ep.metadataJson || "{}")) as Record<string, unknown>;
             return `[${ep.id}] ${ep.taskId} - ${ep.state} (${new Date(ep.startTime).toISOString().split("T")[0]}) ${meta.description ? `- ${meta.description}` : ""}`;
           }).join("\n");
         },
@@ -1001,8 +1002,8 @@ ${recentSamples}
 
           const limited = similar.slice(0, args.limit);
           return limited.map((ep) => {
-            const commands = JSON.parse(ep.commandsJson || "[]");
-            const outcomes = JSON.parse(ep.validationOutcomesJson || "[]");
+            const commands = JSON.parse(ep.commandsJson || "[]") as string[];
+            const outcomes = JSON.parse(ep.validationOutcomesJson || "[]") as ValidationOutcome[];
             return `Task: ${ep.taskId} (${ep.state})
   Commands: ${commands.slice(0, 3).join(" → ")}
   Validations: ${outcomes.map((o: ValidationOutcome) => `${o.type}:${o.status}`).join(", ") || "none"}
