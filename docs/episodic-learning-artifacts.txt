@@ -35,7 +35,7 @@ Key Spec Requirements (quoted):
    and time range."
 
 Implementation Status: ✅ COMPLETE
-  - EpisodicTaskRecord interface in src/types.ts (lines 333-349)
+  - EpisodicTaskRecord type (Zod-based) in src/types.ts — validated at runtime via validateEpisodicRecord()
   - TaskState type: "pending" | "running" | "success" | "failed" | "timeout"
   - FailureType enum: "syntax" | "runtime" | "logic" | "resource" | "unknown"
   - episodic_tasks table in src/store.ts
@@ -156,9 +156,9 @@ BL-019: Retry/Recovery Evidence
     "The system SHALL allow querying evidence by task type or error type."
 
   Implementation: ✅ COMPLETE
-    - RetryAttempt type in src/types.ts (lines 304-310)
+    - RetryAttempt type in src/types.ts — validated via RetryAttemptSchema
       Fields: attemptNumber, timestamp, outcome, errorMessage, failureType
-    - RecoveryStrategy type in src/types.ts (lines 312-316)
+    - RecoveryStrategy type in src/types.ts — validated via RecoveryStrategySchema
       Fields: name, attemptedAt, succeeded
     - Storage in EpisodicTaskRecord.retryAttemptsJson
     - Storage in EpisodicTaskRecord.recoveryStrategiesJson
