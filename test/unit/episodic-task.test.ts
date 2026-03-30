@@ -201,3 +201,220 @@ test("extractSuccessPatternsFromScope extracts patterns from successful episodes
     await cleanupDbPath(dbPath);
   }
 });
+
+test("addCommandToEpisode appends a command to an existing episode", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const now = Date.now();
+    await store.createTaskEpisode({
+      id: "ep-cmd-1",
+      sessionId: "s1",
+      scope: "project:addcmd",
+      taskId: "task-addcmd",
+      state: "running",
+      startTime: now,
+      commandsJson: "[]",
+      validationOutcomesJson: "[]",
+      successPatternsJson: "[]",
+      retryAttemptsJson: "[]",
+      recoveryStrategiesJson: "[]",
+      metadataJson: "{}",
+    });
+
+    const result = await store.addCommandToEpisode("task-addcmd", "project:addcmd", "git commit -m 'fix bug'");
+    assert.equal(result, true, "should return true for successful append");
+
+    const retrieved = await store.getTaskEpisode("task-addcmd", "project:addcmd");
+    const commands: string[] = JSON.parse(retrieved!.commandsJson);
+    assert.equal(commands.length, 1, "should have 1 command");
+    assert.equal(commands[0], "git commit -m 'fix bug'");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("addCommandToEpisode accumulates multiple commands", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const now = Date.now();
+    await store.createTaskEpisode({
+      id: "ep-cmd-2",
+      sessionId: "s1",
+      scope: "project:addcmds",
+      taskId: "task-addcmds",
+      state: "running",
+      startTime: now,
+      commandsJson: "[]",
+      validationOutcomesJson: "[]",
+      successPatternsJson: "[]",
+      retryAttemptsJson: "[]",
+      recoveryStrategiesJson: "[]",
+      metadataJson: "{}",
+    });
+
+    await store.addCommandToEpisode("task-addcmds", "project:addcmds", "npm test");
+    await store.addCommandToEpisode("task-addcmds", "project:addcmds", "npm run build");
+
+    const retrieved = await store.getTaskEpisode("task-addcmds", "project:addcmds");
+    const commands: string[] = JSON.parse(retrieved!.commandsJson);
+    assert.equal(commands.length, 2, "should have 2 commands");
+    assert.equal(commands[0], "npm test");
+    assert.equal(commands[1], "npm run build");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("addCommandToEpisode returns false for nonexistent episode", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const result = await store.addCommandToEpisode("nonexistent-task", "project:addcmd", "git commit");
+    assert.equal(result, false, "should return false when episode not found");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("addValidationOutcome appends a validation outcome to an existing episode", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const now = Date.now();
+    await store.createTaskEpisode({
+      id: "ep-val-1",
+      sessionId: "s1",
+      scope: "project:addval",
+      taskId: "task-addval",
+      state: "running",
+      startTime: now,
+      commandsJson: "[]",
+      validationOutcomesJson: "[]",
+      successPatternsJson: "[]",
+      retryAttemptsJson: "[]",
+      recoveryStrategiesJson: "[]",
+      metadataJson: "{}",
+    });
+
+    const outcome = { type: "build" as const, status: "pass" as const, timestamp: now, passedCount: 5 };
+    const result = await store.addValidationOutcome("task-addval", "project:addval", outcome);
+    assert.equal(result, true, "should return true for successful append");
+
+    const retrieved = await store.getTaskEpisode("task-addval", "project:addval");
+    const outcomes = JSON.parse(retrieved!.validationOutcomesJson);
+    assert.equal(outcomes.length, 1, "should have 1 outcome");
+    assert.equal(outcomes[0].type, "build");
+    assert.equal(outcomes[0].status, "pass");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("addSuccessPatterns merges patterns into existing episode", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const now = Date.now();
+    await store.createTaskEpisode({
+      id: "ep-suc-1",
+      sessionId: "s1",
+      scope: "project:addsuc",
+      taskId: "task-addsuc",
+      state: "success",
+      startTime: now,
+      commandsJson: "[]",
+      validationOutcomesJson: "[]",
+      successPatternsJson: '[{"commands":["npm run build"],"tools":["npm"],"confidence":0.8,"extractedAt":' + (now - 1000) + '}]',
+      retryAttemptsJson: "[]",
+      recoveryStrategiesJson: "[]",
+      metadataJson: "{}",
+    });
+
+    const newPatterns = [
+      { commands: ["git commit"], tools: ["git"], confidence: 0.9, extractedAt: now },
+    ];
+    const result = await store.addSuccessPatterns("task-addsuc", "project:addsuc", newPatterns);
+    assert.equal(result, true, "should return true for successful merge");
+
+    const retrieved = await store.getTaskEpisode("task-addsuc", "project:addsuc");
+    const patterns = JSON.parse(retrieved!.successPatternsJson);
+    assert.equal(patterns.length, 2, "should have 2 patterns after merge");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("addRetryAttempt appends retry attempt with timestamp enrichment", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const now = Date.now();
+    await store.createTaskEpisode({
+      id: "ep-retry-1",
+      sessionId: "s1",
+      scope: "project:addretry",
+      taskId: "task-addretry",
+      state: "failed",
+      startTime: now,
+      commandsJson: "[]",
+      validationOutcomesJson: "[]",
+      successPatternsJson: "[]",
+      retryAttemptsJson: "[]",
+      recoveryStrategiesJson: "[]",
+      metadataJson: "{}",
+    });
+
+    const before = Date.now();
+    const result = await store.addRetryAttempt("task-addretry", "project:addretry", {
+      attemptNumber: 1,
+      outcome: "failed",
+      errorMessage: "timeout",
+    });
+    const after = Date.now();
+    assert.equal(result, true, "should return true for successful append");
+
+    const retrieved = await store.getTaskEpisode("task-addretry", "project:addretry");
+    const attempts = JSON.parse(retrieved!.retryAttemptsJson);
+    assert.equal(attempts.length, 1, "should have 1 retry attempt");
+    assert.equal(attempts[0].attemptNumber, 1);
+    assert.equal(attempts[0].outcome, "failed");
+    assert.equal(attempts[0].errorMessage, "timeout");
+    assert.ok(attempts[0].timestamp >= before && attempts[0].timestamp <= after, "timestamp should be enriched by helper");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
+
+test("addRecoveryStrategy appends recovery strategy with attemptedAt enrichment", async () => {
+  const { store, dbPath } = await createTestStore();
+  try {
+    const now = Date.now();
+    await store.createTaskEpisode({
+      id: "ep-rec-1",
+      sessionId: "s1",
+      scope: "project:addrec",
+      taskId: "task-addrec",
+      state: "failed",
+      startTime: now,
+      commandsJson: "[]",
+      validationOutcomesJson: "[]",
+      successPatternsJson: "[]",
+      retryAttemptsJson: "[]",
+      recoveryStrategiesJson: "[]",
+      metadataJson: "{}",
+    });
+
+    const before = Date.now();
+    const result = await store.addRecoveryStrategy("task-addrec", "project:addrec", {
+      name: "Exponential backoff",
+      succeeded: false,
+    });
+    const after = Date.now();
+    assert.equal(result, true, "should return true for successful append");
+
+    const retrieved = await store.getTaskEpisode("task-addrec", "project:addrec");
+    const strategies = JSON.parse(retrieved!.recoveryStrategiesJson);
+    assert.equal(strategies.length, 1, "should have 1 recovery strategy");
+    assert.equal(strategies[0].name, "Exponential backoff");
+    assert.equal(strategies[0].succeeded, false);
+    assert.ok(strategies[0].attemptedAt >= before && strategies[0].attemptedAt <= after, "attemptedAt should be enriched by helper");
+  } finally {
+    await cleanupDbPath(dbPath);
+  }
+});
