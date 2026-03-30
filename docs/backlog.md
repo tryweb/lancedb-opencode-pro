@@ -99,6 +99,18 @@
 | BL-036 | LanceDB ANN fast-path for large scopes | P2 | planned | TBD | TBD | 當單一 scope 記憶數持續成長時，利用 LanceDB 原生向量能力作為前置篩選/快速路徑 [Surface: Plugin] |
 | BL-037 | Event table TTL / archival | P1 | planned | TBD | TBD | 為 `effectiveness_events` 建立保留期與歸檔機制，降低長期 local store 成本 [Surface: Plugin] |
 
+## Epic 10 — 架構可維護性與效能硬化
+
+| BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
+|---|---|---|---|---|---|---|
+| BL-041 | Tool registration 模組化拆分 | P1 | planned | TBD | TBD | `src/index.ts` 目前含 26 個 tool 定義；先拆 `tools/memory.ts`、`tools/feedback.ts`、`tools/episodic.ts` 降低耦合 [Surface: Plugin] |
+| BL-042 | Store repository 職責分離 | P2 | planned | TBD | TBD | 將 `MemoryStore` 逐步拆為 `MemoryRepository` / `EventRepository` / `EpisodicTaskRepository`，由 provider 統一連線管理 [Surface: Plugin] |
+| BL-043 | Episodic 更新流程 DRY 化 | P1 | planned | TBD | TBD | `addCommandToEpisode`、`addValidationOutcome`、`addSuccessPatterns`、`addRetryAttempt`、`addRecoveryStrategy` 以共用 updater 模板收斂 [Surface: Plugin] |
+| BL-044 | Duplicate consolidation 擴充性重構 | P1 | planned | TBD | TBD | 以 ANN top-k / chunking 取代全表 O(N²) 比對，避免 `consolidateDuplicates` 在大 scope 阻塞 event loop [Surface: Plugin] |
+| BL-045 | Scope cache 記憶體治理 | P1 | planned | TBD | TBD | `getCachedScopes` 避免全量 records/token/vector 常駐；導入 bounded/lazy/分段策略 [Surface: Plugin] |
+| BL-046 | DB row runtime 型別驗證 | P1 | planned | TBD | TBD | 降低 `as unknown as EpisodicTaskRecord` 風險；讀取後做 schema validation [Surface: Plugin + Test-infra] |
+| BL-047 | Embedding fallback 可觀測性補強 | P2 | planned | TBD | TBD | 目前多處 embed fallback 為 silent degrade；補 structured warning + metrics，不改壞容錯語義 [Surface: Plugin + Docs] |
+
 ---
 
 ## 建議執行切片（索引版）
@@ -116,6 +128,9 @@ BL-003, BL-014, BL-015, BL-016, BL-017, BL-018, BL-019, BL-020
 
 ### Release D（儲存引擎與規模韌性）— 📝 PLANNED
 BL-036, BL-037
+
+### Release E（架構可維護性與效能硬化）— 📝 PLANNED
+BL-041, BL-043, BL-044, BL-045, BL-046, BL-047
 
 ---
 
