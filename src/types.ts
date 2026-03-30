@@ -267,6 +267,34 @@ export interface EffectivenessSummary {
   };
 }
 
+export type TrendDirection = "improving" | "stable" | "declining" | "insufficient-data";
+
+export interface TrendIndicator {
+  direction: TrendDirection;
+  percentageChange: number;
+}
+
+export interface DashboardSummary {
+  scope: string;
+  periodDays: number;
+  currentPeriodStart: number;
+  currentPeriodEnd: number;
+  previousPeriodStart: number;
+  previousPeriodEnd: number;
+  current: EffectivenessSummary;
+  previous: EffectivenessSummary | null;
+  trends: {
+    captureSuccessRate: TrendIndicator;
+    recallHitRate: TrendIndicator;
+    feedbackHelpfulRate: TrendIndicator;
+  };
+  insights: string[];
+  recentMemories: {
+    total: number;
+    byCategory: Partial<Record<MemoryCategory, { count: number; samples: string[] }>>;
+  };
+}
+
 export type PreferenceCategory = "language" | "tool" | "style" | "workflow" | "other";
 export type PreferenceScope = "project" | "global";
 export type PreferenceSource = "explicit" | "inferred";
