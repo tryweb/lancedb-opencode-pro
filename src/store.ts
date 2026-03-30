@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { CaptureSkipReason, CitationSource, CitationStatus, DashboardSummary, EffectivenessSummary, EpisodicTaskRecord, LastRecallSession, MemoryCategory, MemoryEffectivenessEvent, MemoryExplanation, MemoryRecord, RecallFactors, RecallSource, SearchResult, SuccessPattern, TaskState, TrendDirection, ValidationOutcome } from "./types.js";
+import type { CaptureSkipReason, CitationSource, CitationStatus, DashboardSummary, EffectivenessSummary, EpisodicTaskRecord, LastRecallSession, MemoryCategory, MemoryEffectivenessEvent, MemoryExplanation, MemoryFeedbackStats, MemoryRecord, RecallFactors, RecallSource, SearchResult, SuccessPattern, TaskState, TrendDirection, ValidationOutcome } from "./types.js";
 import { validateEpisodicRecord, validateEpisodicRecordArray } from "./types.js";
 import { cosineSimilarity, generateId, tokenize } from "./utils.js";
 
@@ -194,6 +194,7 @@ export class MemoryStore {
     recencyBoost?: boolean;
     recencyHalfLifeHours?: number;
     importanceWeight?: number;
+    feedbackWeight?: number;
     globalDiscountFactor?: number;
   }): Promise<SearchResult[]> {
     const cached = await this.getCachedScopes(params.scopes);
@@ -211,6 +212,7 @@ export class MemoryStore {
     const recencyBoostEnabled = params.recencyBoost ?? true;
     const recencyHalfLifeHours = Math.max(1, params.recencyHalfLifeHours ?? 72);
     const importanceWeight = clampImportanceWeight(params.importanceWeight ?? 0.4);
+    const feedbackWeight = Math.max(0, Math.min(1, params.feedbackWeight ?? 0));
     const globalDiscountFactor = params.globalDiscountFactor ?? 1.0;
 
     const candidates = cached.records
@@ -227,6 +229,13 @@ export class MemoryStore {
 
     const vectorRanks = useVectorChannel ? buildRankMap(candidates, (item) => item.vectorScore) : null;
     const bm25Ranks = useBm25Channel ? buildRankMap(candidates, (item) => item.bm25Score) : null;
+
+    const feedbackStatsMap = feedbackWeight > 0
+      ? await this.getMemoryFeedbackStatsMap(
+          candidates.map((c) => c.record.id),
+          params.scopes,
+        )
+      : new Map<string, MemoryFeedbackStats>();
 
     const scored = candidates
       .map((item) => {
@@ -246,7 +255,11 @@ export class MemoryStore {
           : 1;
         const importanceFactor = 1 + importanceWeight * clampImportance(item.record.importance);
         const scopeFactor = item.isGlobal ? globalDiscountFactor : 1.0;
-        const score = rrfScore * recencyFactor * importanceFactor * scopeFactor;
+        const feedbackStats = feedbackStatsMap.get(item.record.id);
+        const feedbackFactor = feedbackWeight > 0 && feedbackStats
+          ? 1 + feedbackWeight * (feedbackStats.feedbackFactor - 1)
+          : 1;
+        const score = rrfScore * recencyFactor * importanceFactor * scopeFactor * feedbackFactor;
         return {
           record: item.record,
           score,
@@ -1532,6 +1545,76 @@ export class MemoryStore {
     return rows
       .map((row) => normalizeEventRow(row))
       .filter((row): row is MemoryEffectivenessEvent => row !== null);
+  }
+
+  /**
+   * Get feedback stats for a set of memory IDs.
+   * Returns a map of memoryId -> feedback stats.
+   * Only considers feedback within the last 30 days.
+   */
+  async getMemoryFeedbackStatsMap(memoryIds: string[], scopes: string[]): Promise<Map<string, MemoryFeedbackStats>> {
+    const feedbackStats = new Map<string, MemoryFeedbackStats>();
+    if (memoryIds.length === 0 || scopes.length === 0) return feedbackStats;
+
+    // Default feedback window: 30 days
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    const table = this.requireEventTable();
+    const whereExpr = scopes.map((scope) => `scope = '${escapeSql(scope)}'`).join(" OR ");
+    const memoryIdExpr = memoryIds.map((id) => `memoryId = '${escapeSql(id)}'`).join(" OR ");
+
+    const rows = await table
+      .query()
+      .where(`(${whereExpr}) AND (${memoryIdExpr}) AND type = 'feedback' AND timestamp >= ${thirtyDaysAgo}`)
+      .select([
+        "memoryId",
+        "feedbackType",
+        "helpful",
+      ])
+      .limit(100000)
+      .toArray();
+
+    // Aggregate feedback per memory
+    const feedbackMap = new Map<string, { helpful: number; unhelpful: number; wrong: number }>();
+    for (const row of rows) {
+      const memoryId = row.memoryId as string;
+      const feedbackType = row.feedbackType as string;
+      const helpful = row.helpful as number;
+
+      if (!feedbackMap.has(memoryId)) {
+        feedbackMap.set(memoryId, { helpful: 0, unhelpful: 0, wrong: 0 });
+      }
+      const stats = feedbackMap.get(memoryId)!;
+
+      if (feedbackType === "wrong") {
+        stats.wrong += 1;
+      } else if (feedbackType === "useful") {
+        if (helpful === 1) {
+          stats.helpful += 1;
+        } else if (helpful === 0) {
+          stats.unhelpful += 1;
+        }
+      }
+    }
+
+    // Calculate feedback factor for each memory
+    for (const [memoryId, stats] of feedbackMap) {
+      const totalFeedback = stats.helpful + stats.unhelpful;
+      const helpfulRate = totalFeedback > 0 ? stats.helpful / totalFeedback : 0.5; // Neutral if no feedback
+      const wrongPenalty = Math.min(0.3, stats.wrong * 0.1);
+      const feedbackFactor = 1 + (helpfulRate - 0.5) * 2 - wrongPenalty;
+
+      feedbackStats.set(memoryId, {
+        memoryId,
+        helpful: stats.helpful,
+        unhelpful: stats.unhelpful,
+        wrong: stats.wrong,
+        helpfulRate,
+        feedbackFactor,
+      });
+    }
+
+    return feedbackStats;
   }
 
   private async readByScopesIncludingMerged(scopes: string[]): Promise<MemoryRecord[]> {

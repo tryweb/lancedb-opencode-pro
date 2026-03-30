@@ -70,6 +70,7 @@ export interface RetrievalConfig {
   recencyBoost: boolean;
   recencyHalfLifeHours: number;
   importanceWeight: number;
+  feedbackWeight: number;
 }
 
 export interface CodeSummarizationConfig {
@@ -282,6 +283,15 @@ export type TrendDirection = "improving" | "stable" | "declining" | "insufficien
 export interface TrendIndicator {
   direction: TrendDirection;
   percentageChange: number;
+}
+
+export interface MemoryFeedbackStats {
+  memoryId: string;
+  helpful: number;
+  unhelpful: number;
+  wrong: number;
+  helpfulRate: number;
+  feedbackFactor: number;
 }
 
 export interface DashboardSummary {

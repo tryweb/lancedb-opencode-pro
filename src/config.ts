@@ -39,6 +39,11 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
     0,
     2,
   );
+  const feedbackWeight = clamp(
+    toNumber(process.env.LANCEDB_OPENCODE_PRO_FEEDBACK_WEIGHT ?? retrievalRaw.feedbackWeight, 0.3),
+    0,
+    1,
+  );
 
   const embeddingProvider = resolveEmbeddingProvider(
     firstString(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER, embeddingRaw.provider),
@@ -91,6 +96,7 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       recencyBoost,
       recencyHalfLifeHours,
       importanceWeight,
+      feedbackWeight,
     },
     injection,
     dedup,
