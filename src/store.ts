@@ -914,42 +914,58 @@ export class MemoryStore {
     return rows as unknown as EpisodicTaskRecord[];
   }
 
-  async addCommandToEpisode(taskId: string, scope: string, command: string): Promise<boolean> {
+  /**
+   * Generic helper for appending items to an episodic task's JSON array field.
+   * Centralizes the read-parse-push-write pattern across all add*Episode methods.
+   */
+  private async appendToEpisodeField<T>(
+    taskId: string,
+    scope: string,
+    fieldAccessor: (record: EpisodicTaskRecord) => string,
+    fieldMutator: (record: EpisodicTaskRecord, value: string) => EpisodicTaskRecord,
+    parser: (raw: string) => T[],
+    serializer: (items: T[]) => string,
+    newItem: T,
+    itemEnricher?: (item: T) => T,
+  ): Promise<boolean> {
     await this.ensureEpisodicTaskTable(384);
     const table = this.requireEpisodicTaskTable();
     const rows = await table.query().where(`taskId = '${escapeSql(taskId)}' AND scope = '${escapeSql(scope)}'`).toArray();
     if (rows.length === 0) return false;
 
     const existing = rows[0] as unknown as EpisodicTaskRecord;
-    const commands: string[] = existing.commandsJson ? JSON.parse(existing.commandsJson) : [];
-    commands.push(command);
+    const items: T[] = parser(fieldAccessor(existing) || "[]");
+    const enrichedItem = itemEnricher ? itemEnricher(newItem) : newItem;
+    items.push(enrichedItem);
 
-    const updated: EpisodicTaskRecord = {
-      ...existing,
-      commandsJson: JSON.stringify(commands),
-    };
+    const updated = fieldMutator(existing, serializer(items));
     await table.delete(`id = '${escapeSql(existing.id)}'`);
     await table.add([updated]);
     return true;
   }
 
+  async addCommandToEpisode(taskId: string, scope: string, command: string): Promise<boolean> {
+    return this.appendToEpisodeField(
+      taskId,
+      scope,
+      (r) => r.commandsJson,
+      (r, v) => ({ ...r, commandsJson: v }),
+      (raw) => (raw ? JSON.parse(raw) : []),
+      (items) => JSON.stringify(items),
+      command,
+    );
+  }
+
   async addValidationOutcome(taskId: string, scope: string, outcome: ValidationOutcome): Promise<boolean> {
-    await this.ensureEpisodicTaskTable(384);
-    const table = this.requireEpisodicTaskTable();
-    const rows = await table.query().where(`taskId = '${escapeSql(taskId)}' AND scope = '${escapeSql(scope)}'`).toArray();
-    if (rows.length === 0) return false;
-
-    const existing = rows[0] as unknown as EpisodicTaskRecord;
-    const outcomes: ValidationOutcome[] = existing.validationOutcomesJson ? JSON.parse(existing.validationOutcomesJson) : [];
-    outcomes.push(outcome);
-
-    const updated: EpisodicTaskRecord = {
-      ...existing,
-      validationOutcomesJson: JSON.stringify(outcomes),
-    };
-    await table.delete(`id = '${escapeSql(existing.id)}'`);
-    await table.add([updated]);
-    return true;
+    return this.appendToEpisodeField(
+      taskId,
+      scope,
+      (r) => r.validationOutcomesJson,
+      (r, v) => ({ ...r, validationOutcomesJson: v }),
+      (raw) => (raw ? JSON.parse(raw) : []),
+      (items) => JSON.stringify(items),
+      outcome,
+    );
   }
 
   async addSuccessPatterns(taskId: string, scope: string, patterns: SuccessPattern[]): Promise<boolean> {
@@ -1067,47 +1083,29 @@ export class MemoryStore {
   }
 
   async addRetryAttempt(taskId: string, scope: string, attempt: { attemptNumber: number; outcome: "success" | "failed" | "abandoned"; errorMessage?: string; failureType?: string }): Promise<boolean> {
-    await this.ensureEpisodicTaskTable(384);
-    const table = this.requireEpisodicTaskTable();
-    const rows = await table.query().where(`taskId = '${escapeSql(taskId)}' AND scope = '${escapeSql(scope)}'`).toArray();
-    if (rows.length === 0) return false;
-
-    const existing = rows[0] as unknown as EpisodicTaskRecord;
-    const attempts = JSON.parse(existing.retryAttemptsJson || "[]");
-    attempts.push({
-      ...attempt,
-      timestamp: Date.now(),
-    });
-
-    const updated: EpisodicTaskRecord = {
-      ...existing,
-      retryAttemptsJson: JSON.stringify(attempts),
-    };
-    await table.delete(`id = '${escapeSql(existing.id)}'`);
-    await table.add([updated]);
-    return true;
+    return this.appendToEpisodeField(
+      taskId,
+      scope,
+      (r) => r.retryAttemptsJson,
+      (r, v) => ({ ...r, retryAttemptsJson: v }),
+      (raw) => JSON.parse(raw || "[]"),
+      (items) => JSON.stringify(items),
+      attempt,
+      (item) => ({ ...item, timestamp: Date.now() }),
+    );
   }
 
   async addRecoveryStrategy(taskId: string, scope: string, strategy: { name: string; succeeded: boolean }): Promise<boolean> {
-    await this.ensureEpisodicTaskTable(384);
-    const table = this.requireEpisodicTaskTable();
-    const rows = await table.query().where(`taskId = '${escapeSql(taskId)}' AND scope = '${escapeSql(scope)}'`).toArray();
-    if (rows.length === 0) return false;
-
-    const existing = rows[0] as unknown as EpisodicTaskRecord;
-    const strategies = JSON.parse(existing.recoveryStrategiesJson || "[]");
-    strategies.push({
-      ...strategy,
-      attemptedAt: Date.now(),
-    });
-
-    const updated: EpisodicTaskRecord = {
-      ...existing,
-      recoveryStrategiesJson: JSON.stringify(strategies),
-    };
-    await table.delete(`id = '${escapeSql(existing.id)}'`);
-    await table.add([updated]);
-    return true;
+    return this.appendToEpisodeField(
+      taskId,
+      scope,
+      (r) => r.recoveryStrategiesJson,
+      (r, v) => ({ ...r, recoveryStrategiesJson: v }),
+      (raw) => JSON.parse(raw || "[]"),
+      (items) => JSON.stringify(items),
+      strategy,
+      (item) => ({ ...item, attemptedAt: Date.now() }),
+    );
   }
 
   async suggestRetryBudget(scope: string, minSamples: number = 3): Promise<{ suggestedRetries: number; confidence: number; basedOnCount: number; shouldStop: boolean; stopReason?: string } | null> {

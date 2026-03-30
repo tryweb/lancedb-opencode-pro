@@ -2,25 +2,26 @@
 
 ## Implementation Tasks
 
-- [ ] **T1**: Implement `appendToEpisodeField<T>()` private generic helper in `src/store.ts`
+- [x] **T1**: Implement `appendToEpisodeField<T>()` private generic helper in `src/store.ts`
   - Signature: `appendToEpisodeField<T>(taskId, scope, fieldAccessor, fieldMutator, parser, serializer, newItem, itemEnricher?): Promise<boolean>`
   - Must handle empty/null field values gracefully via `parser(raw || '[]')`
   - Must add timestamp enrichment for `retryAttempts` and `recoveryStrategies` items
 
-- [ ] **T2**: Refactor `addCommandToEpisode()` to delegate to helper (reduce from ~15 lines to ~8)
+- [x] **T2**: Refactor `addCommandToEpisode()` to delegate to helper (reduce from ~15 lines to ~8)
   - Verify existing tests pass without modification
 
-- [ ] **T3**: Refactor `addValidationOutcome()` to delegate to helper
+- [x] **T3**: Refactor `addValidationOutcome()` to delegate to helper
 
-- [ ] **T4**: Refactor `addSuccessPatterns()` to delegate to helper
+- [x] **T4**: Refactor `addSuccessPatterns()` to delegate to helper
+  - Note: `addSuccessPatterns` has array-merge semantics (not single-item push), so it retains inline implementation for correctness
 
-- [ ] **T5**: Refactor `addRetryAttempt()` to delegate to helper (with `itemEnricher` that adds `timestamp`)
+- [x] **T5**: Refactor `addRetryAttempt()` to delegate to helper (with `itemEnricher` that adds `timestamp`)
 
-- [ ] **T6**: Refactor `addRecoveryStrategy()` to delegate to helper (with `itemEnricher` that adds `attemptedAt`)
+- [x] **T6**: Refactor `addRecoveryStrategy()` to delegate to helper (with `itemEnricher` that adds `attemptedAt`)
 
-- [ ] **T7**: Run existing episodic integration tests to confirm no behavioral regression
-  - `npm test -- --grep "episode\|episodic"` (or equivalent)
-  - All existing tests pass
+- [x] **T7**: Run existing episodic integration tests to confirm no behavioral regression
+  - `npm run test:effectiveness` — 63/63 tests pass (31 foundation + 32 regression)
+  - No behavioral regression detected
 
 ## Verification Matrix
 
