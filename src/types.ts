@@ -267,6 +267,58 @@ export interface EffectivenessSummary {
   };
 }
 
+export type TrendDirection = "improving" | "stable" | "declining" | "insufficient-data";
+
+export interface TrendIndicator {
+  direction: TrendDirection;
+  percentageChange: number;
+}
+
+export interface DashboardSummary {
+  scope: string;
+  periodDays: number;
+  currentPeriodStart: number;
+  currentPeriodEnd: number;
+  previousPeriodStart: number;
+  previousPeriodEnd: number;
+  current: EffectivenessSummary;
+  previous: EffectivenessSummary | null;
+  trends: {
+    captureSuccessRate: TrendIndicator;
+    recallHitRate: TrendIndicator;
+    feedbackHelpfulRate: TrendIndicator;
+  };
+  insights: string[];
+  recentMemories: {
+    total: number;
+    byCategory: Partial<Record<MemoryCategory, { count: number; samples: string[] }>>;
+  };
+}
+
+export interface RetryToSuccessMetric {
+  status: "ok" | "insufficient-data" | "no-failed-tasks";
+  rate: number;
+  totalFailedTasks: number;
+  succeededAfterRetry: number;
+  sampleCount: number;
+}
+
+export interface MemoryLiftMetric {
+  status: "ok" | "insufficient-data" | "no-recall-data";
+  lift: number;
+  successRateWithRecall: number;
+  successRateWithoutRecall: number;
+  withRecallCount: number;
+  withoutRecallCount: number;
+}
+
+export interface KpiSummary {
+  scope: string;
+  periodDays: number;
+  retryToSuccess: RetryToSuccessMetric;
+  memoryLift: MemoryLiftMetric;
+}
+
 export type PreferenceCategory = "language" | "tool" | "style" | "workflow" | "other";
 export type PreferenceScope = "project" | "global";
 export type PreferenceSource = "explicit" | "inferred";

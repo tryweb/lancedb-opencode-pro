@@ -440,6 +440,20 @@ const plugin: Plugin = async (input) => {
           return JSON.stringify(summary, null, 2);
         },
       }),
+      memory_kpi: tool({
+        description: "Show learning KPI metrics (retry-to-success rate and memory lift)",
+        args: {
+          days: tool.schema.number().int().min(1).max(365).default(30),
+          scope: tool.schema.string().optional(),
+        },
+        execute: async (args, context) => {
+          await state.ensureInitialized();
+          if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+          const scope = args.scope ?? deriveProjectScope(context.worktree);
+          const kpi = await state.store.getKpiSummary(scope, args.days);
+          return JSON.stringify(kpi, null, 2);
+        },
+      }),
       memory_scope_promote: tool({
         description: "Promote a memory from project scope to global scope for cross-project sharing",
         args: {
