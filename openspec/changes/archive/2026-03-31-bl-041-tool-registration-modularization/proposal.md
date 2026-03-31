@@ -18,6 +18,19 @@
 
 The roadmap explicitly calls for modularization: "先拆 `tools/memory.ts`、`tools/feedback.ts`、`tools/episodic.ts` 降低耦合"
 
+## What Changes
+
+- Extract 26 tool definitions from `src/index.ts` into modular files in `src/tools/`
+- Create `src/tools/memory.ts`, `src/tools/feedback.ts`, `src/tools/episodic.ts`
+- Add `src/tools/index.ts` for re-exports
+- Update imports in `src/index.ts`
+
+## Why
+
+- Reduce file size and complexity in index.ts
+- Improve maintainability and testability
+- Enable future feature additions without further growth
+
 ## Why Now
 
 - The plugin has matured with 26 stable tools

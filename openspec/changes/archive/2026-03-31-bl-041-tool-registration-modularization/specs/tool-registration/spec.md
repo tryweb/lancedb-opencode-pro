@@ -113,3 +113,17 @@ Entrypoint: `src/tools/index.ts` re-exports
 | Tool schemas unchanged | ✅ | n/a | n/a | yes |
 | Tool execution works | ✅ | ✅ | n/a | yes |
 | Module structure valid | ✅ | n/a | n/a | yes |
+
+---
+
+## ADDED
+
+- `src/tools/` directory with modular tool definitions
+- `src/tools/memory.ts` - 19 memory-related tools
+- `src/tools/feedback.ts` - 4 feedback tools
+- `src/tools/episodic.ts` - 5 episodic/task tools
+- `src/tools/index.ts` - re-exports for backward compatibility
+
+## MODIFIED
+
+- `src/index.ts` - reduced from 1626 to ~620 lines, imports tools from new modules
