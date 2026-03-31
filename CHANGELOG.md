@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Duplicate Consolidation Performance** (internal-only):
+  - Replaced O(N²) pairwise comparison with O(N×k) ANN-based candidate retrieval
+  - Added chunked processing (BATCH_SIZE=100) with setImmediate yield points to prevent event loop blocking
+  - Configurable `dedup.candidateLimit` (default: 50, max: 200) via `LANCEDB_OPENCODE_PRO_DEDUP_CANDIDATE_LIMIT`
+  - Fallback to O(N²) for small scopes (< 500) on vector index error
+  - Evidence:
+    - Spec: openspec/changes/bl-044-duplicate-consolidation-ann-chunking/
+    - Code: src/store.ts (consolidateDuplicates), src/config.ts (candidateLimit), src/types.ts (DedupConfig)
+    - Tests: test/config.test.ts
+    - Surface: internal-api
+
+---
+
 ## [0.6.0] - 2026-03-31
 
 ### Added

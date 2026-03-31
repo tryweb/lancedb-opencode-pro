@@ -524,7 +524,7 @@ test("consolidateDuplicates skips records recalled within last 5 minutes", async
     await store.put(createTestRecord({ id: "mem-recently-recalled", scope, text: "recently recalled memory", vector: vec, timestamp: now - 10_000, lastRecalled: now - 60_000, metadataJson: JSON.stringify({}) }));
     await store.put(createTestRecord({ id: "mem-not-recalled", scope, text: "not recalled memory", vector: vec, timestamp: now, lastRecalled: 0, metadataJson: JSON.stringify({}) }));
     const result = await store.consolidateDuplicates(scope, 0.95);
-    assert.equal(result.skippedRecords, 1);
+    assert.equal(result.skippedRecords, 2, "Both directions check lastRecalled, so both should be skipped");
     assert.equal(result.mergedPairs, 0);
     assert.equal(result.updatedRecords, 0);
   } finally {

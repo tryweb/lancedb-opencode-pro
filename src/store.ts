@@ -368,7 +368,7 @@ export class MemoryStore {
     return toDelete.length;
   }
 
-  async consolidateDuplicates(scope: string, threshold: number): Promise<{
+  async consolidateDuplicates(scope: string, threshold: number, candidateLimit = 50): Promise<{
     mergedPairs: number;
     updatedRecords: number;
     skippedRecords: number;
@@ -378,62 +378,225 @@ export class MemoryStore {
       return { mergedPairs: 0, updatedRecords: 0, skippedRecords: 0 };
     }
 
+    const BATCH_SIZE = 100;
+    const FALLBACK_THRESHOLD = 500;
+
     let mergedPairs = 0;
     let updatedRecords = 0;
     let skippedRecords = 0;
     const now = Date.now();
     const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    const startTime = Date.now();
 
     const rowsWithNorms = rows.map((row) => ({
       row,
       norm: this.scopeCache.get(scope)?.norms.get(row.id) ?? vecNorm(row.vector),
     }));
 
-    for (let i = 0; i < rowsWithNorms.length; i += 1) {
-      const a = rowsWithNorms[i];
-      for (let j = i + 1; j < rowsWithNorms.length; j += 1) {
-        const b = rowsWithNorms[j];
-        const sim = storeFastCosine(a.row.vector, b.row.vector, a.norm, b.norm);
-        if (sim < threshold) continue;
+    const processWithANN = async (): Promise<{ merged: number; updated: number; skipped: number }> => {
+      let localMerged = 0;
+      let localUpdated = 0;
+      let localSkipped = 0;
+      const mergedIds = new Set<string>();
 
-        const aMeta = parseMetadata(a.row.metadataJson);
-        if (aMeta.status === "merged") {
-          skippedRecords += 1;
-          continue;
+      const totalChunks = Math.ceil(rowsWithNorms.length / BATCH_SIZE);
+
+      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+        const chunkStart = chunkIdx * BATCH_SIZE;
+        const chunkEnd = Math.min(chunkStart + BATCH_SIZE, rowsWithNorms.length);
+        const chunk = rowsWithNorms.slice(chunkStart, chunkEnd);
+
+        for (let i = 0; i < chunk.length; i++) {
+          const a = chunk[i];
+
+          if (mergedIds.has(a.row.id)) continue;
+
+          try {
+            const candidates = await this.findSimilarVectors(
+              a.row.vector,
+              scope,
+              candidateLimit + 1,
+            );
+
+            for (const candidate of candidates) {
+              if (candidate.id === a.row.id) continue;
+              if (mergedIds.has(candidate.id)) continue;
+
+              const b = rowsWithNorms.find((r) => r.row.id === candidate.id);
+              if (!b) continue;
+              if (mergedIds.has(b.row.id)) continue;
+
+              const sim = storeFastCosine(a.row.vector, b.row.vector, a.norm, b.norm);
+              if (sim < threshold) continue;
+
+              const aMeta = parseMetadata(a.row.metadataJson);
+              if (aMeta.status === "merged") {
+                localSkipped += 1;
+                continue;
+              }
+              if (a.row.lastRecalled > 0 && now - a.row.lastRecalled < FIVE_MINUTES_MS) {
+                localSkipped += 1;
+                continue;
+              }
+
+              const bMeta = parseMetadata(b.row.metadataJson);
+              if (bMeta.status === "merged" || bMeta.mergedFrom) {
+                localSkipped += 1;
+                continue;
+              }
+              if (b.row.lastRecalled > 0 && now - b.row.lastRecalled < FIVE_MINUTES_MS) {
+                localSkipped += 1;
+                continue;
+              }
+
+              const older = a.row.timestamp <= b.row.timestamp ? a.row : b.row;
+              const newer = a.row.timestamp <= b.row.timestamp ? b.row : a.row;
+
+              if (older.id === newer.id) {
+                continue;
+              }
+
+              const newerMeta = parseMetadata(newer.metadataJson);
+
+              const mergedIntoId = newer.id;
+              const updatedOlderMeta = { status: "merged" as const, mergedInto: mergedIntoId };
+              await this.requireTable().delete(`id = '${escapeSql(older.id)}'`);
+              await this.requireTable().add([{
+                ...older,
+                status: "merged",
+                metadataJson: JSON.stringify({ ...parseMetadata(older.metadataJson), ...updatedOlderMeta }),
+              }]);
+
+              const updatedNewerMeta = { ...newerMeta, mergedFrom: older.id };
+              await this.requireTable().delete(`id = '${escapeSql(newer.id)}'`);
+              await this.requireTable().add([{
+                ...newer,
+                metadataJson: JSON.stringify(updatedNewerMeta),
+              }]);
+
+              mergedIds.add(older.id);
+              mergedIds.add(newer.id);
+              localMerged += 1;
+              localUpdated += 2;
+            }
+          } catch {
+            console.warn(`[consolidate] ANN search failed for memory ${a.row.id}, skipping`);
+          }
         }
-        if (a.row.lastRecalled > 0 && now - a.row.lastRecalled < FIVE_MINUTES_MS) {
-          skippedRecords += 1;
-          continue;
+
+        const chunkStartTime = Date.now();
+        console.log(JSON.stringify({
+          msg: "consolidate:chunk",
+          scope,
+          chunk: chunkIdx + 1,
+          total: totalChunks,
+          processed: chunkEnd,
+          merged: localMerged,
+          candidates: candidateLimit,
+          elapsedMs: chunkStartTime - startTime,
+        }));
+
+        if (chunkIdx < totalChunks - 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+          const lag = Date.now() - chunkStartTime;
+          if (lag > 100) {
+            console.warn(`[consolidate] event loop delay detected: ${lag}ms at chunk ${chunkIdx + 1}`);
+          }
         }
+      }
 
-        const older = a.row.timestamp <= b.row.timestamp ? a.row : b.row;
-        const newer = a.row.timestamp <= b.row.timestamp ? b.row : a.row;
+      return { merged: localMerged, updated: localUpdated, skipped: localSkipped };
+    };
 
-        // Skip self-merge: when timestamps are equal, both could reference the same record
-        if (older.id === newer.id) {
-          continue;
+    const processWithFallback = (): { merged: number; updated: number; skipped: number } => {
+      let localMerged = 0;
+      let localUpdated = 0;
+      let localSkipped = 0;
+      const mergedIds = new Set<string>();
+
+      for (let i = 0; i < rowsWithNorms.length; i += 1) {
+        const a = rowsWithNorms[i];
+        if (mergedIds.has(a.row.id)) continue;
+
+        for (let j = i + 1; j < rowsWithNorms.length; j += 1) {
+          const b = rowsWithNorms[j];
+          if (mergedIds.has(b.row.id)) continue;
+
+          const sim = storeFastCosine(a.row.vector, b.row.vector, a.norm, b.norm);
+          if (sim < threshold) continue;
+
+          const aMeta = parseMetadata(a.row.metadataJson);
+          if (aMeta.status === "merged" || aMeta.mergedFrom) {
+            localSkipped += 1;
+            continue;
+          }
+          if (a.row.lastRecalled > 0 && now - a.row.lastRecalled < FIVE_MINUTES_MS) {
+            localSkipped += 1;
+            continue;
+          }
+
+          const bMeta = parseMetadata(b.row.metadataJson);
+          if (bMeta.status === "merged" || bMeta.mergedFrom) {
+            localSkipped += 1;
+            continue;
+          }
+          if (b.row.lastRecalled > 0 && now - b.row.lastRecalled < FIVE_MINUTES_MS) {
+            localSkipped += 1;
+            continue;
+          }
+
+          const older = a.row.timestamp <= b.row.timestamp ? a.row : b.row;
+          const newer = a.row.timestamp <= b.row.timestamp ? b.row : a.row;
+
+          if (older.id === newer.id) {
+            continue;
+          }
+
+          const newerMeta = parseMetadata(newer.metadataJson);
+
+          const mergedIntoId = newer.id;
+          const updatedOlderMeta = { status: "merged" as const, mergedInto: mergedIntoId };
+          this.requireTable().delete(`id = '${escapeSql(older.id)}'`);
+          this.requireTable().add([{
+            ...older,
+            status: "merged",
+            metadataJson: JSON.stringify({ ...parseMetadata(older.metadataJson), ...updatedOlderMeta }),
+          }]);
+
+          const updatedNewerMeta = { ...newerMeta, mergedFrom: older.id };
+          this.requireTable().delete(`id = '${escapeSql(newer.id)}'`);
+          this.requireTable().add([{
+            ...newer,
+            metadataJson: JSON.stringify(updatedNewerMeta),
+          }]);
+
+          mergedIds.add(older.id);
+          mergedIds.add(newer.id);
+          localMerged += 1;
+          localUpdated += 2;
         }
+      }
 
-        const newerMeta = parseMetadata(newer.metadataJson);
+      return { merged: localMerged, updated: localUpdated, skipped: localSkipped };
+    };
 
-        const mergedIntoId = newer.id;
-        const updatedOlderMeta = { status: "merged" as const, mergedInto: mergedIntoId };
-        await this.requireTable().delete(`id = '${escapeSql(older.id)}'`);
-        await this.requireTable().add([{
-          ...older,
-          status: "merged",
-          metadataJson: JSON.stringify({ ...parseMetadata(older.metadataJson), ...updatedOlderMeta }),
-        }]);
+    try {
+      const annResult = await processWithANN();
+      mergedPairs = annResult.merged;
+      updatedRecords = annResult.updated;
+      skippedRecords = annResult.skipped;
+    } catch (error) {
+      console.error(`[consolidate] ANN-based consolidation failed:`, error);
 
-        const updatedNewerMeta = { ...newerMeta, mergedFrom: older.id };
-        await this.requireTable().delete(`id = '${escapeSql(newer.id)}'`);
-        await this.requireTable().add([{
-          ...newer,
-          metadataJson: JSON.stringify(updatedNewerMeta),
-        }]);
-
-        mergedPairs += 1;
-        updatedRecords += 2;
+      if (rows.length < FALLBACK_THRESHOLD) {
+        console.warn(`[consolidate] Falling back to O(N²) for small scope (${rows.length} memories)`);
+        const fbResult = processWithFallback();
+        mergedPairs = fbResult.merged;
+        updatedRecords = fbResult.updated;
+        skippedRecords = fbResult.skipped;
+      } else {
+        console.warn(`[consolidate] Skipping fallback for large scope (${rows.length} >= ${FALLBACK_THRESHOLD})`);
+        return { mergedPairs: 0, updatedRecords: 0, skippedRecords: 0 };
       }
     }
 
@@ -442,6 +605,32 @@ export class MemoryStore {
     }
 
     return { mergedPairs, updatedRecords, skippedRecords };
+  }
+
+  private async findSimilarVectors(
+    queryVector: number[],
+    scope: string,
+    limit: number,
+  ): Promise<Array<{ id: string; vector: number[] }>> {
+    try {
+      const table = this.requireTable();
+      const results = await table.query()
+        .where(`scope = '${escapeSql(scope)}'`)
+        .limit(limit)
+        .toArray();
+
+      const scored = results.map((r) => {
+        const vec = r.vector as number[];
+        const norm = vecNorm(vec);
+        const sim = storeFastCosine(queryVector, vec, vecNorm(queryVector), norm);
+        return { id: r.id as string, vector: vec, score: sim };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      return scored.slice(0, limit).map((s) => ({ id: s.id, vector: s.vector }));
+    } catch {
+      return [];
+    }
   }
 
   async countIncompatibleVectors(scopes: string[], expectedDim: number): Promise<number> {

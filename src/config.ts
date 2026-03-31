@@ -167,7 +167,18 @@ function resolveDedupConfig(
     0.0,
     1.0,
   );
-  return { enabled, writeThreshold, consolidateThreshold };
+  const candidateLimit = clamp(
+    toNumber(env.LANCEDB_OPENCODE_PRO_DEDUP_CANDIDATE_LIMIT ?? dedupRaw.candidateLimit, 50),
+    10,
+    200,
+  );
+  if (candidateLimit !== toNumber(dedupRaw.candidateLimit, 50)) {
+    const original = toNumber(dedupRaw.candidateLimit, 50);
+    if (original !== 50) {
+      console.warn(`[config] dedup.candidateLimit clamped from ${original} to ${candidateLimit}`);
+    }
+  }
+  return { enabled, writeThreshold, consolidateThreshold, candidateLimit };
 }
 
 function resolveInjectionConfig(

@@ -111,6 +111,7 @@ export interface DedupConfig {
   enabled: boolean;
   writeThreshold: number;
   consolidateThreshold: number;
+  candidateLimit: number;
 }
 
 export interface MemoryRuntimeConfig {
