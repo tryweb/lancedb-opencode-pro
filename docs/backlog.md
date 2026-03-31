@@ -107,7 +107,7 @@
 | BL-042 | Store repository 職責分離 | P2 | planned | TBD | TBD | 將 `MemoryStore` 逐步拆為 `MemoryRepository` / `EventRepository` / `EpisodicTaskRepository`，由 provider 統一連線管理 [Surface: Plugin] |
 | BL-043 | Episodic 更新流程 DRY 化 | P1 | **done** | episodic-update-dry | `openspec/changes/episodic-update-dry/` | `addCommandToEpisode`、`addValidationOutcome`、`addSuccessPatterns`、`addRetryAttempt`、`addRecoveryStrategy` 以共用 updater 模板收斂 [Surface: Plugin] |
 | BL-044 | Duplicate consolidation 擴充性重構 | P1 | **done** | bl-044-duplicate-consolidation-ann-chunking | `openspec/changes/archive/2026-03-31-bl-044-duplicate-consolidation-ann-chunking/` | 以 ANN top-k / chunking 取代全表 O(N²) 比對，避免 `consolidateDuplicates` 在大 scope 阻塞 event loop [Surface: Plugin] |
-| BL-045 | Scope cache 記憶體治理 | P1 | planned | TBD | TBD | `getCachedScopes` 避免全量 records/token/vector 常駐；導入 bounded/lazy/分段策略 [Surface: Plugin] |
+| BL-045 | Scope cache 記憶體治理 | P1 | **done** | scope-cache-memory-governance | openspec/changes/scope-cache-memory-governance/ | `getCachedScopes` 避免全量 records/token/vector 常駐；導入 bounded/lazy/分段策略 [Surface: Plugin] |
 | BL-046 | DB row runtime 型別驗證 | P1 | **done** | episodic-record-validation | `openspec/changes/episodic-record-validation/` | 降低 `as unknown as EpisodicTaskRecord` 風險；讀取後做 schema validation [Surface: Plugin + Test-infra] |
 | BL-047 | Embedding fallback 可觀測性補強 | P2 | planned | TBD | TBD | 目前多處 embed fallback 為 silent degrade；補 structured warning + metrics，不改壞容錯語義 [Surface: Plugin + Docs] |
 
