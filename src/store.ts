@@ -29,12 +29,31 @@ const TABLE_NAME = "memories";
 const EVENTS_TABLE_NAME = "effectiveness_events";
 const EVENTS_SOURCE_COLUMN = "source";
 
-interface ScopeCache {
+interface ScopeCacheConfig {
+  maxScopes: number;
+  maxRecordsPerScope: number;
+  enabled: boolean;
+}
+
+interface ScopeCacheEntry {
   records: MemoryRecord[];
   tokenized: string[][];
   idf: Map<string, number>;
   norms: Map<string, number>;
+  lastAccessTimestamp: number;
 }
+
+interface CacheStats {
+  hits: number;
+  misses: number;
+  evictions: number;
+}
+
+const DEFAULT_CACHE_CONFIG: ScopeCacheConfig = {
+  maxScopes: 10,
+  maxRecordsPerScope: 1000,
+  enabled: true,
+};
 
 // Exported for use by consolidateDuplicates
 export function storeFastCosine(a: number[], b: number[], normA: number, normB: number): number {
@@ -59,9 +78,13 @@ export class MemoryStore {
     fts: false,
     ftsError: "",
   };
-  private scopeCache = new Map<string, ScopeCache>();
+  private scopeCache = new Map<string, ScopeCacheEntry>();
+  private cacheConfig: ScopeCacheConfig;
+  private cacheStats: CacheStats = { hits: 0, misses: 0, evictions: 0 };
 
-  constructor(private readonly dbPath: string) {}
+  constructor(private readonly dbPath: string, cacheConfig?: Partial<ScopeCacheConfig>) {
+    this.cacheConfig = { ...DEFAULT_CACHE_CONFIG, ...cacheConfig };
+  }
 
   async init(vectorDim: number): Promise<void> {
     await mkdir(this.dbPath, { recursive: true });
@@ -1202,7 +1225,24 @@ export class MemoryStore {
     this.scopeCache.delete(scope);
   }
 
-  private async getCachedScopes(scopes: string[]): Promise<ScopeCache> {
+  private async getCachedScopes(scopes: string[]): Promise<ScopeCacheEntry> {
+    if (!this.cacheConfig.enabled) {
+      const allRecords: MemoryRecord[] = [];
+      const allTokenized: string[][] = [];
+      const allNorms = new Map<string, number>();
+      for (const scope of scopes) {
+        const records = await this.readByScopes([scope]);
+        allRecords.push(...records);
+        const tokenized = records.map((record) => tokenize(record.text));
+        allTokenized.push(...tokenized);
+        for (const record of records) {
+          allNorms.set(record.id, vecNorm(record.vector));
+        }
+      }
+      const idf = computeIdf(allTokenized);
+      return { records: allRecords, tokenized: allTokenized, idf, norms: allNorms, lastAccessTimestamp: Date.now() };
+    }
+
     const allRecords: MemoryRecord[] = [];
     const allTokenized: string[][] = [];
     const allNorms = new Map<string, number>();
@@ -1211,14 +1251,23 @@ export class MemoryStore {
       let entry = this.scopeCache.get(scope);
       if (!entry) {
         const records = await this.readByScopes([scope]);
-        const tokenized = records.map((record) => tokenize(record.text));
+        let sortedRecords = records;
+        if (records.length > this.cacheConfig.maxRecordsPerScope) {
+          sortedRecords = [...records].sort((a, b) => b.timestamp - a.timestamp).slice(0, this.cacheConfig.maxRecordsPerScope);
+        }
+        const tokenized = sortedRecords.map((record) => tokenize(record.text));
         const idf = computeIdf(tokenized);
         const norms = new Map<string, number>();
-        for (const record of records) {
+        for (const record of sortedRecords) {
           norms.set(record.id, vecNorm(record.vector));
         }
-        entry = { records, tokenized, idf, norms };
+        entry = { records: sortedRecords, tokenized, idf, norms, lastAccessTimestamp: Date.now() };
         this.scopeCache.set(scope, entry);
+        this.cacheStats.misses++;
+        this.enforceMaxScopes();
+      } else {
+        entry.lastAccessTimestamp = Date.now();
+        this.cacheStats.hits++;
       }
       allRecords.push(...entry.records);
       allTokenized.push(...entry.tokenized);
@@ -1231,7 +1280,24 @@ export class MemoryStore {
       ? this.scopeCache.get(scopes[0])!.idf
       : computeIdf(allTokenized);
 
-    return { records: allRecords, tokenized: allTokenized, idf, norms: allNorms };
+    return { records: allRecords, tokenized: allTokenized, idf, norms: allNorms, lastAccessTimestamp: Date.now() };
+  }
+
+  private enforceMaxScopes(): void {
+    while (this.scopeCache.size > this.cacheConfig.maxScopes) {
+      let lruScope: string | null = null;
+      let lruTimestamp = Infinity;
+      for (const [scope, entry] of this.scopeCache) {
+        if (entry.lastAccessTimestamp < lruTimestamp) {
+          lruTimestamp = entry.lastAccessTimestamp;
+          lruScope = scope;
+        }
+      }
+      if (lruScope) {
+        this.scopeCache.delete(lruScope);
+        this.cacheStats.evictions++;
+      }
+    }
   }
 
   private requireTable(): LanceTable {
