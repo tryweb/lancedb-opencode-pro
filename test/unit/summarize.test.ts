@@ -219,6 +219,13 @@ test("calculateInjectionLimit: returns 0 for empty results", () => {
       preserveComments: true,
       preserveImports: false,
     },
+    taskTypeProfiles: {
+      coding: { maxMemories: 4, budgetTokens: 5120, summaryTargetChars: 400, categoryWeights: { decision: 1.5, entity: 1.2, fact: 1.0, preference: 0.8, other: 0.5 } },
+      documentation: { maxMemories: 3, budgetTokens: 3072, summaryTargetChars: 500, categoryWeights: { decision: 1.4, fact: 1.3, entity: 1.2, preference: 0.8, other: 0.5 } },
+      review: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { preference: 1.4, decision: 1.2, entity: 1.0, fact: 0.9, other: 0.5 } },
+      release: { maxMemories: 4, budgetTokens: 6144, summaryTargetChars: 350, categoryWeights: { decision: 1.5, entity: 1.3, fact: 1.2, preference: 0.8, other: 0.5 } },
+      general: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { decision: 1.3, fact: 1.0, entity: 1.0, preference: 0.9, other: 0.5 } },
+    },
   };
   assert.strictEqual(calculateInjectionLimit([], config), 0);
 });
@@ -241,6 +248,13 @@ test("calculateInjectionLimit: respects maxMemories in fixed mode", () => {
       codeTruncationMode: "smart",
       preserveComments: true,
       preserveImports: false,
+    },
+    taskTypeProfiles: {
+      coding: { maxMemories: 4, budgetTokens: 5120, summaryTargetChars: 400, categoryWeights: { decision: 1.5, entity: 1.2, fact: 1.0, preference: 0.8, other: 0.5 } },
+      documentation: { maxMemories: 3, budgetTokens: 3072, summaryTargetChars: 500, categoryWeights: { decision: 1.4, fact: 1.3, entity: 1.2, preference: 0.8, other: 0.5 } },
+      review: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { preference: 1.4, decision: 1.2, entity: 1.0, fact: 0.9, other: 0.5 } },
+      release: { maxMemories: 4, budgetTokens: 6144, summaryTargetChars: 350, categoryWeights: { decision: 1.5, entity: 1.3, fact: 1.2, preference: 0.8, other: 0.5 } },
+      general: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { decision: 1.3, fact: 1.0, entity: 1.0, preference: 0.9, other: 0.5 } },
     },
   };
   const createMockResult = (score: number, text: string) => ({
@@ -277,6 +291,13 @@ test("calculateInjectionLimit: filters by injectionFloor", () => {
       preserveComments: true,
       preserveImports: false,
     },
+    taskTypeProfiles: {
+      coding: { maxMemories: 4, budgetTokens: 5120, summaryTargetChars: 400, categoryWeights: { decision: 1.5, entity: 1.2, fact: 1.0, preference: 0.8, other: 0.5 } },
+      documentation: { maxMemories: 3, budgetTokens: 3072, summaryTargetChars: 500, categoryWeights: { decision: 1.4, fact: 1.3, entity: 1.2, preference: 0.8, other: 0.5 } },
+      review: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { preference: 1.4, decision: 1.2, entity: 1.0, fact: 0.9, other: 0.5 } },
+      release: { maxMemories: 4, budgetTokens: 6144, summaryTargetChars: 350, categoryWeights: { decision: 1.5, entity: 1.3, fact: 1.2, preference: 0.8, other: 0.5 } },
+      general: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { decision: 1.3, fact: 1.0, entity: 1.0, preference: 0.9, other: 0.5 } },
+    },
   };
   const createMockResult = (score: number, text: string) => ({
     record: { id: `id-${score}`, text, score, vector: [], category: "other" as const, scope: "test", importance: 0.5, timestamp: Date.now(), lastRecalled: 0, recallCount: 0, projectCount: 0, schemaVersion: 1, embeddingModel: "test", vectorDim: 0, metadataJson: "{}" },
@@ -311,6 +332,13 @@ test("createSummarizationConfig: creates config from injection config", () => {
       codeTruncationMode: "smart",
       preserveComments: true,
       preserveImports: false,
+    },
+    taskTypeProfiles: {
+      coding: { maxMemories: 4, budgetTokens: 5120, summaryTargetChars: 400, categoryWeights: { decision: 1.5, entity: 1.2, fact: 1.0, preference: 0.8, other: 0.5 } },
+      documentation: { maxMemories: 3, budgetTokens: 3072, summaryTargetChars: 500, categoryWeights: { decision: 1.4, fact: 1.3, entity: 1.2, preference: 0.8, other: 0.5 } },
+      review: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { preference: 1.4, decision: 1.2, entity: 1.0, fact: 0.9, other: 0.5 } },
+      release: { maxMemories: 4, budgetTokens: 6144, summaryTargetChars: 350, categoryWeights: { decision: 1.5, entity: 1.3, fact: 1.2, preference: 0.8, other: 0.5 } },
+      general: { maxMemories: 3, budgetTokens: 4096, summaryTargetChars: 300, categoryWeights: { decision: 1.3, fact: 1.0, entity: 1.0, preference: 0.9, other: 0.5 } },
     },
   };
   const config = createSummarizationConfig(injection);

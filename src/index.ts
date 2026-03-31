@@ -9,12 +9,67 @@ import { extractPreferenceSignals, aggregatePreferences, resolveConflicts, build
 import { isTcpPortAvailable, parsePortReservations, planPorts, reservationKey } from "./ports.js";
 import { buildScopeFilter, deriveProjectScope } from "./scope.js";
 import { MemoryStore } from "./store.js";
-import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, LastRecallSession, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, ValidationOutcome, ValidationType } from "./types.js";
+import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, LastRecallSession, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, TaskType, ValidationOutcome, ValidationType } from "./types.js";
 import { validateEpisodicRecordArray } from "./types.js";
 import { generateId } from "./utils.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 
 const SCHEMA_VERSION = 1;
+
+// Task-type detection keywords
+const TASK_TYPE_KEYWORDS: Record<TaskType, string[]> = {
+  coding: ["code", "function", "class", "implement", "debug", "fix", "refactor", "api", "bug", "error", "test", "寫程式", "程式", "代碼", "函數"],
+  documentation: ["doc", "document", "readme", "comment", "guide", "tutorial", "說明", "文檔", "文"],
+  review: ["review", "review code", "pull request", "pr", "merge", "審查", "檢視"],
+  release: ["release", "publish", "deploy", "version", "build", "npm", "publish", "發布", "版本"],
+  general: [],
+};
+
+/**
+ * Detect task type from user message
+ */
+function detectTaskType(messages: { info?: { role?: string }; parts?: Part[] }[]): TaskType {
+  // Find the last user message
+  let userText = "";
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg.info?.role === "user" && msg.parts) {
+      userText = msg.parts.filter((p): p is TextPart => p.type === "text").map((p) => p.text).join(" ").toLowerCase();
+      break;
+    }
+  }
+
+  // Score each task type
+  const scores: Record<TaskType, number> = { coding: 0, documentation: 0, review: 0, release: 0, general: 0 };
+
+  for (const [taskType, keywords] of Object.entries(TASK_TYPE_KEYWORDS) as [TaskType, string[]][]) {
+    for (const keyword of keywords) {
+      if (userText.includes(keyword.toLowerCase())) {
+        scores[taskType] += 1;
+      }
+    }
+  }
+
+  // Find the task type with highest score (excluding general)
+  let maxScore = 0;
+  let detectedType: TaskType = "general";
+
+  for (const [taskType, score] of Object.entries(scores) as [TaskType, number][]) {
+    if (taskType !== "general" && score > maxScore) {
+      maxScore = score;
+      detectedType = taskType;
+    }
+  }
+
+  return maxScore > 0 ? detectedType : "general";
+}
+
+/**
+ * Get category weights for a specific task type
+ */
+function getCategoryWeights(taskType: TaskType, profiles: Record<TaskType, { categoryWeights: Record<string, number> }>): Record<string, number> {
+  return profiles[taskType]?.categoryWeights ?? profiles.general.categoryWeights;
+}
 
 const plugin: Plugin = async (input) => {
   const state = await createRuntimeState(input);
@@ -62,6 +117,20 @@ const plugin: Plugin = async (input) => {
       const activeScope = deriveProjectScope(input.worktree);
       const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
 
+      let messages: { info?: { role?: string }; parts?: Part[] }[] = [];
+      try {
+        const rawMessages = await input.client.session.messages({ path: { id: eventInput.sessionID } });
+        const unwrapped = (rawMessages as { data?: unknown }).data;
+        if (Array.isArray(unwrapped)) {
+          messages = unwrapped as { info?: { role?: string }; parts?: Part[] }[];
+        }
+      } catch {
+        messages = [];
+      }
+      const taskType = detectTaskType(messages);
+      const profile = state.config.injection.taskTypeProfiles[taskType] ?? state.config.injection.taskTypeProfiles.general;
+      const categoryWeights = getCategoryWeights(taskType, state.config.injection.taskTypeProfiles);
+
       let queryVector: number[] = [];
       try {
         queryVector = await state.embedder.embed(query);
@@ -74,7 +143,7 @@ const plugin: Plugin = async (input) => {
         query,
         queryVector,
         scopes,
-        limit: state.config.injection.maxMemories * 2,
+        limit: profile.maxMemories * 2,
         vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
         bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
         minScore: Math.max(state.config.retrieval.minScore, state.config.injection.injectionFloor),
@@ -86,10 +155,15 @@ const plugin: Plugin = async (input) => {
         globalDiscountFactor: state.config.globalDiscountFactor,
       });
 
+      const weightedResults = results.map((r) => {
+        const catWeight = categoryWeights[r.record.category] ?? 1.0;
+        return { ...r, score: r.score * catWeight };
+      }).sort((a, b) => b.score - a.score);
+
       state.lastRecall = {
         timestamp: Date.now(),
         query,
-        results: results.map((r) => ({
+        results: weightedResults.map((r) => ({
           memoryId: r.record.id,
           score: r.score,
           factors: {
@@ -113,13 +187,19 @@ const plugin: Plugin = async (input) => {
 
       const preferenceInjection = buildPreferenceInjection(effectivePreferences, {
         mode: state.config.injection.mode === "adaptive" ? "fixed" : state.config.injection.mode,
-        maxMemories: state.config.injection.maxMemories,
+        maxMemories: profile.maxMemories,
         tokenBudget: 300,
       });
 
-      // Apply injection control
-      const injectionLimit = calculateInjectionLimit(results, state.config.injection);
-      const limitedResults = results.slice(0, injectionLimit);
+      // Apply injection control with task-type profile
+      const injectionConfig = {
+        ...state.config.injection,
+        maxMemories: profile.maxMemories,
+        budgetTokens: profile.budgetTokens,
+        summaryTargetChars: profile.summaryTargetChars,
+      };
+      const injectionLimit = calculateInjectionLimit(weightedResults, injectionConfig);
+      const limitedResults = weightedResults.slice(0, injectionLimit);
 
       await state.store.putEvent({
         id: generateId(),

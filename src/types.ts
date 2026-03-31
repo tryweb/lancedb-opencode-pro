@@ -24,6 +24,15 @@ export interface SummarizedContent {
 
 export type MemoryCategory = "preference" | "fact" | "decision" | "entity" | "other";
 
+export type TaskType = "coding" | "documentation" | "review" | "release" | "general";
+
+export interface InjectionProfile {
+  maxMemories: number;
+  budgetTokens: number;
+  summaryTargetChars: number;
+  categoryWeights: Partial<Record<MemoryCategory, number>>;
+}
+
 export type CaptureOutcome = "considered" | "skipped" | "stored";
 
 export type CaptureSkipReason =
@@ -84,6 +93,7 @@ export interface InjectionConfig {
   scoreDropTolerance: number;
   injectionFloor: number;
   codeSummarization: CodeSummarizationConfig;
+  taskTypeProfiles: Record<TaskType, InjectionProfile>;
 }
 
 export interface SummarizationConfig {
