@@ -55,3 +55,40 @@ test("dedup config: invalid threshold values are clamped to [0.0, 1.0]", async (
     assert.equal(config.dedup.consolidateThreshold, 0.0);
   });
 });
+
+test("dedup config: candidateLimit defaults to 50", async () => {
+  await withPatchedEnv({ LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true" }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.dedup.candidateLimit, 50);
+  });
+});
+
+test("dedup config: candidateLimit can be customized via env var", async () => {
+  await withPatchedEnv({
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_DEDUP_CANDIDATE_LIMIT: "100",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.dedup.candidateLimit, 100);
+  });
+});
+
+test("dedup config: candidateLimit above max is clamped to 200", async () => {
+  await withPatchedEnv({
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_DEDUP_CANDIDATE_LIMIT: "500",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.dedup.candidateLimit, 200);
+  });
+});
+
+test("dedup config: candidateLimit below min is clamped to 10", async () => {
+  await withPatchedEnv({
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_DEDUP_CANDIDATE_LIMIT: "5",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.dedup.candidateLimit, 10);
+  });
+});

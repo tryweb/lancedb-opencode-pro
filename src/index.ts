@@ -96,7 +96,7 @@ const plugin: Plugin = async (input) => {
         await flushAutoCapture(sessionID, state, input.client);
         if (evt.type === "session.compacted" && state.config.dedup.enabled) {
           const activeScope = deriveProjectScope(input.worktree);
-          state.store.consolidateDuplicates(activeScope, state.config.dedup.consolidateThreshold).catch(() => {});
+          state.store.consolidateDuplicates(activeScope, state.config.dedup.consolidateThreshold, state.config.dedup.candidateLimit).catch(() => {});
         }
         await handleSessionIdle(sessionID, state);
       }
@@ -664,8 +664,16 @@ const plugin: Plugin = async (input) => {
             return "Rejected: memory_consolidate requires confirm=true.";
           }
           const targetScope = args.scope ?? deriveProjectScope(context.worktree);
-          const result = await state.store.consolidateDuplicates(targetScope, state.config.dedup.consolidateThreshold);
-          return JSON.stringify({ scope: targetScope, ...result }, null, 2);
+          if (state.consolidationInProgress.get(targetScope)) {
+            return JSON.stringify({ scope: targetScope, status: "already_in_progress", message: "Consolidation already in progress for this scope" });
+          }
+          state.consolidationInProgress.set(targetScope, true);
+          try {
+            const result = await state.store.consolidateDuplicates(targetScope, state.config.dedup.consolidateThreshold, state.config.dedup.candidateLimit);
+            return JSON.stringify({ scope: targetScope, ...result }, null, 2);
+          } finally {
+            state.consolidationInProgress.delete(targetScope);
+          }
         },
       }),
       memory_consolidate_all: tool({
@@ -680,12 +688,28 @@ const plugin: Plugin = async (input) => {
             return "Rejected: memory_consolidate_all requires confirm=true.";
           }
           const projectScope = deriveProjectScope(context.worktree);
-          const globalResult = await state.store.consolidateDuplicates("global", state.config.dedup.consolidateThreshold);
-          const projectResult = await state.store.consolidateDuplicates(projectScope, state.config.dedup.consolidateThreshold);
-          return JSON.stringify({
-            global: { scope: "global", ...globalResult },
-            project: { scope: projectScope, ...projectResult },
-          }, null, 2);
+          const globalInProgress = state.consolidationInProgress.get("global");
+          const projectInProgress = state.consolidationInProgress.get(projectScope);
+          if (globalInProgress || projectInProgress) {
+            return JSON.stringify({
+              global: { scope: "global", status: globalInProgress ? "already_in_progress" : "pending" },
+              project: { scope: projectScope, status: projectInProgress ? "already_in_progress" : "pending" },
+              message: "Consolidation already in progress for one or more scopes",
+            });
+          }
+          state.consolidationInProgress.set("global", true);
+          state.consolidationInProgress.set(projectScope, true);
+          try {
+            const globalResult = await state.store.consolidateDuplicates("global", state.config.dedup.consolidateThreshold, state.config.dedup.candidateLimit);
+            const projectResult = await state.store.consolidateDuplicates(projectScope, state.config.dedup.consolidateThreshold, state.config.dedup.candidateLimit);
+            return JSON.stringify({
+              global: { scope: "global", ...globalResult },
+              project: { scope: projectScope, ...projectResult },
+            }, null, 2);
+          } finally {
+            state.consolidationInProgress.delete("global");
+            state.consolidationInProgress.delete(projectScope);
+          }
         },
       }),
       memory_port_plan: tool({
@@ -1280,6 +1304,7 @@ async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<Runtime
     captureBuffer: new Map(),
     activeEpisodes: new Map(),
     lastRecall: null,
+    consolidationInProgress: new Map(),
     ensureInitialized: async () => {
       if (state.initialized) return;
       try {
@@ -1511,6 +1536,7 @@ interface RuntimeState {
   captureBuffer: Map<string, string[]>;
   activeEpisodes: Map<string, string>;
   lastRecall: LastRecallSession | null;
+  consolidationInProgress: Map<string, boolean>;
   ensureInitialized: () => Promise<void>;
 }
 
