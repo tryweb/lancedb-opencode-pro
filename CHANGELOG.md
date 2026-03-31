@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
-## [Unreleased]
+## [0.6.0] - 2026-03-31
 
 ### Added
 
@@ -17,12 +17,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
   - Rule-based actionable insights (low recall hit rate, high skip rate, low helpful rate)
   - Recent memory breakdown by category with sample previews
   - `DashboardSummary`, `TrendIndicator`, `TrendDirection` data model in `src/types.ts`
+  - Evidence:
+    - Spec: openspec/specs/learning-dashboard-summary/spec.md
+    - Code: 9b1061b src/index.ts, src/store.ts, src/types.ts
+    - Tests: test/unit/dashboard.test.ts, scripts/e2e-opencode-memory.mjs
+    - Surface: opencode-tool
 
 - **Learning KPI Pipeline** (`learning-kpi-pipeline`, user-facing):
   - `memory_kpi`: query learning effectiveness KPIs (retry-to-success rate, memory lift)
   - `calculateRetryToSuccessRate()`: retry-to-success metric from episodic task data
   - `calculateMemoryLift()`: lift metric comparing success rates with/without recall
   - `RetryToSuccessMetric`, `MemoryLiftMetric`, `KpiSummary` data model in `src/types.ts`
+  - Evidence:
+    - Spec: openspec/specs/learning-kpi-pipeline/spec.md
+    - Code: a2c9338 src/index.ts, src/store.ts, src/types.ts
+    - Tests: test/unit/kpi.test.ts, scripts/e2e-opencode-memory.mjs
+    - Surface: opencode-tool
+
+- **Feedback-Driven Ranking** (`feedback-driven-ranking`, user-facing):
+  - `feedbackWeight` config option: control how much user feedback affects search ranking
+  - `getMemoryFeedbackStatsMap()`: retrieve aggregated feedback stats for memories
+  - `FeedbackStats` type with helpful/wrong/neutral counts
+  - Search results now boost memories with positive feedback
+  - Evidence:
+    - Spec: openspec/specs/feedback-factor/spec.md
+    - Code: 0172cad src/store.ts, src/config.ts, src/types.ts
+    - Tests: test/unit/feedback-factor.test.ts, scripts/e2e-opencode-memory.mjs
+    - Surface: internal-api
+
+- **Task-Type Aware Injection** (`task-type-injection-policy`, user-facing):
+  - `TaskType` enum: coding, documentation, review, release, general
+  - `InjectionProfile` with categoryWeights, maxMemories, budgetTokens, summaryTargetChars
+  - `detectTaskType()`: keyword-based task type detection
+  - `getCategoryWeights()`: get category weights for specific task type
+  - 5 built-in profiles: coding (4 memories), documentation (3 + long summaries), review (3), release (4 + high budget), general (3)
+  - Applied in system.transform hook and memory_search tool
+  - Evidence:
+    - Spec: openspec/specs/task-type-injection/spec.md
+    - Code: 441b48b src/index.ts, src/config.ts, src/types.ts
+    - Tests: test/unit/task-type.test.ts, scripts/e2e-opencode-memory.mjs
+    - Surface: internal-api
 
 ---
 
