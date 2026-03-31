@@ -84,12 +84,12 @@
 
 | BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
 |---|---|---|---|---|---|---|
-| BL-030 | Learning dashboard summary | P0 | planned | TBD | TBD | 週摘要可視化 [Surface: Plugin；新增/擴充 plugin summary tool 進行聚合與格式化呈現] |
-| BL-031 | Learning KPI pipeline | P0 | planned | TBD | TBD | retry-to-success / lift 指標 [Surface: Docs + optional plugin tool] |
+| BL-030 | Learning dashboard summary | P0 | **done** | 2026-03-30-learning-dashboard-summary | openspec/specs/learning-dashboard-summary/ | 週摘要可視化 [Surface: Plugin] v0.6.0 |
+| BL-031 | Learning KPI pipeline | P0 | **done** | 2026-03-30-learning-kpi-pipeline | openspec/specs/learning-kpi-pipeline/ | retry-to-success / lift 指標 [Surface: Plugin] v0.6.0 |
 | BL-032 | Eval harness for learning quality | P1 | planned | TBD | TBD | 固定資料集回歸驗證 [Surface: Test-infra] |
 | BL-033 | A/B testing framework | P1 | planned | TBD | TBD | learning feature 效益驗證 [Surface: Test-infra + docs] |
-| BL-038 | Feedback-driven ranking / routing weights | P0 | planned | TBD | TBD | 根據 feedback 動態調整記憶排序與注入權重 [Surface: Plugin] |
-| BL-039 | Task-type aware injection policy | P0 | planned | TBD | TBD | 依任務類型（coding/docs/review/release）調整注入策略 [Surface: Plugin] |
+| BL-038 | Feedback-driven ranking / routing weights | P0 | **done** | 2026-03-30-feedback-driven-ranking | openspec/specs/feedback-factor/ | 根據 feedback 動態調整記憶排序與注入權重 [Surface: Plugin] v0.6.0 |
+| BL-039 | Task-type aware injection policy | P0 | **done** | 2026-03-31-task-type-injection-policy | openspec/specs/task-type-injection/ | 依任務類型（coding/docs/review/release）調整注入策略 [Surface: Plugin] v0.6.0 |
 | BL-040 | Success pattern playbook surface 強化 | P1 | planned | TBD | TBD | 把已存的 episodic success patterns 產品化成可感知的跨任務 playbook surface [Surface: Plugin；以 playbook summary/recommendation tool 交付] |
 
 ## Epic 9 — 儲存引擎與規模韌性
@@ -121,10 +121,10 @@ BL-001, BL-002, BL-005, BL-006, BL-008, BL-010, BL-011, BL-012
 ### Release B（經驗學習閉環）— ✅ DONE
 BL-003, BL-014, BL-015, BL-016, BL-017, BL-018, BL-019, BL-020
 
-### Release C（治理與產品化）— ✅ DONE（部分已取消）
-已完成：BL-022, BL-023, BL-024, BL-025, BL-026, BL-027, BL-034
+### Release C（治理與產品化）— ✅ DONE（v0.6.0 完成）
+已完成：BL-022, BL-023, BL-024, BL-025, BL-026, BL-027, BL-030, BL-031, BL-034, BL-038, BL-039
 已取消（不值得做）：BL-028, BL-029, BL-035
-待處理：BL-021（Plugin；視 upstream 事件）, BL-030（Plugin）, BL-031（Docs + optional plugin tool）, BL-032（Test-infra）, BL-033（Test-infra + docs）, BL-038（Plugin）, BL-039（Plugin）, BL-040（Plugin）
+待處理：BL-021（Plugin；視 upstream 事件）, BL-032（Test-infra）, BL-033（Test-infra + docs）, BL-040（Plugin）
 
 ### Release D（儲存引擎與規模韌性）— 📝 PLANNED
 BL-036, BL-037

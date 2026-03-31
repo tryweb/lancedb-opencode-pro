@@ -103,6 +103,7 @@ That's it! OpenCode will now automatically capture key decisions and inject them
 | `memory_forget` | Remove or disable a memory | [Doc](docs/ADVANCED_CONFIG.md#memory_forget) |
 | `memory_what_did_you_learn` | Show recent learning summaries | [Doc](docs/ADVANCED_CONFIG.md#memory_what_did_you_learn) |
 | `memory_dashboard` | Weekly learning dashboard with trends | [Doc](docs/ADVANCED_CONFIG.md#memory_dashboard) |
+| `memory_kpi` | Learning effectiveness KPIs (retry-to-success, memory lift) | [Doc](docs/ADVANCED_CONFIG.md#memory_kpi) |
 
 *(For full details on tools like **Effectiveness Feedback**, **Cross-Project Sharing**, **Deduplication**, **Citations**, and **Episodic Learning**, please refer to the [Advanced Configuration](docs/ADVANCED_CONFIG.md).)*
 
@@ -165,6 +166,7 @@ Alternatively, install via `.tgz` release asset or build from source. See [Insta
 
 ## 🗺️ Version History
 
+- **v0.6.0**: Learning Dashboard, KPI Pipeline, Feedback-Driven Ranking, Task-Type Aware Injection
 - **v0.5.0**: Memory Explanation Tools (`memory_why`, `memory_explain_recall`)
 - **v0.4.0**: Citation Model (`memory_citation`, `memory_validate_citation`)
 - **v0.3.0**: Episodic Learning Hooks
@@ -190,5 +192,5 @@ See [CHANGELOG.md](CHANGELOG.md) for all changes.
 - **Issues**: Submit errors or requests on [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues).
 - **License**: MIT License - see [LICENSE](LICENSE).
 
-**Last Updated**: 2026-03-29
-**Latest Version**: v0.5.0
+**Last Updated**: 2026-03-31
+**Latest Version**: v0.6.0

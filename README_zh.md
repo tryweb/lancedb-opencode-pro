@@ -103,6 +103,7 @@ curl http://127.0.0.1:11434/api/tags
 | `memory_remember` | 手動儲存記憶 | [進階設定](docs/ADVANCED_CONFIG.zh.md#memory_remember) |
 | `memory_forget` | 移除或停用記憶 | [進階設定](docs/ADVANCED_CONFIG.zh.md#memory_forget) |
 | `memory_what_did_you_learn` | 顯示近期學習摘要 | [進階設定](docs/ADVANCED_CONFIG.zh.md#memory_what_did_you_learn) |
+| `memory_kpi` | 學習效能 KPI (retry-to-success, memory lift) | [進階設定](docs/ADVANCED_CONFIG.zh.md#memory_kpi) |
 
 *(關於 **記憶效果回饋**、**跨專案記憶共享**、**去重複機制**、**引用模型** 以及 **事件式學習** 等更詳細的功能說明，請參見 [進階設定](docs/ADVANCED_CONFIG.zh.md)。)*
 
@@ -165,6 +166,7 @@ docker compose exec opencode-dev npm run verify:full
 
 ## 🗺️ 版本歷史
 
+- **v0.6.0**: 新增學習儀表板、KPI 管線、反饋驅動排序、任務類型感知注入
 - **v0.5.0**: 新增記憶解釋工具 (`memory_why`, `memory_explain_recall`)
 - **v0.4.0**: 新增引用模型追蹤與驗證 (`memory_citation`, `memory_validate_citation`)
 - **v0.3.0**: 引入事件式學習 Hooks
@@ -190,5 +192,5 @@ docker compose exec opencode-dev npm run verify:full
 - **報告問題**: 軟體錯誤回報或功能請求，請至 [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues) 提交。
 - **授權協議**: MIT License - 詳見 [LICENSE](LICENSE)。
 
-**最後更新**: 2026-03-29  
-**最新版本**: v0.5.0
+**最後更新**: 2026-03-31  
+**最新版本**: v0.6.0
