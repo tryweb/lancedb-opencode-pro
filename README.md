@@ -3,13 +3,20 @@
 **LanceDB-backed long-term memory provider for OpenCode**
 
 [![npm version](https://img.shields.io/npm/v/lancedb-opencode-pro)](https://www.npmjs.com/package/lancedb-opencode-pro)
-[![OpenCode](https://img.shields.io/badge/OpenCode-1.2.27+-blue)](https://opencode.ai)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.2.27--1.3.7-blue)](https://opencode.ai) ⚠️ [1.3.8+ known issue](docs/OPENCODE_COMPATIBILITY.md)
 
 Welcome to **lancedb-opencode-pro**! This plugin empowers OpenCode with a durable, long-term memory system powered by LanceDB.
 
 To help you find what you need quickly, please select the guide that best fits your needs:
 
 ## 🗺️ Choose Your Path
+
+### ⚠️ Experiencing Issues?
+*You see "Memory store unavailable" error or plugin not loading on OpenCode v1.3.8+*
+👉 **[Read the Compatibility Guide (10 min)](docs/OPENCODE_COMPATIBILITY.md)** 
+- Known OpenCode v1.3.8+ NAPI bug (Issue #20623)
+- Diagnosis checklist and solutions
+- Downgrade instructions & alternatives
 
 ### 🚀 First-Time Users
 *You are new to this project and want to get it running quickly.*

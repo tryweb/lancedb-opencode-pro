@@ -4,7 +4,17 @@ This directory contains comprehensive analysis of OpenCode extensibility options
 
 ## Documents
 
-### 0. **github-migration.md**
+### 0. **OPENCODE_COMPATIBILITY.md** ⚠️ **NEW**
+OpenCode version compatibility & troubleshooting with:
+- Critical Issue: OpenCode v1.3.8+ native NAPI addon bug
+- Affected versions (v1.3.8 - v1.3.13)
+- Solutions: Downgrade, improve error messaging, long-term alternatives
+- Diagnosis checklist & decision tree
+
+**Read time**: 10-15 minutes  
+**Priority**: **HIGH** if you see "Memory store unavailable" error
+
+### 1. **github-migration.md**
 Post-migration GitHub runbook with:
 - Branch protection bootstrap
 - Optional secrets setup
@@ -13,7 +23,7 @@ Post-migration GitHub runbook with:
 
 **Read time**: 5-10 minutes
 
-### 1. **FINDINGS_SUMMARY.txt** (START HERE)
+### 2. **FINDINGS_SUMMARY.txt** (START HERE)
 Quick executive summary with:
 - Key findings
 - 4 practical options (A, B, C, D)
@@ -23,7 +33,7 @@ Quick executive summary with:
 
 **Read time**: 5-10 minutes
 
-### 2. **QUICK_REFERENCE.md**
+### 3. **QUICK_REFERENCE.md**
 One-page decision guide with:
 - Current state overview
 - Option comparison table
@@ -33,7 +43,7 @@ One-page decision guide with:
 
 **Read time**: 2-3 minutes
 
-### 3. **EXTENSIBILITY_ANALYSIS.md** (COMPREHENSIVE)
+### 4. **EXTENSIBILITY_ANALYSIS.md** (COMPREHENSIVE)
 Full 20KB analysis with:
 - 9 detailed sections
 - Evidence-based findings
@@ -44,7 +54,7 @@ Full 20KB analysis with:
 
 **Read time**: 20-30 minutes
 
-### 4. **embedding-migration.md** (OPERATIONS)
+### 5. **embedding-migration.md** (OPERATIONS)
 Embedding model switching guide with:
 - Vector dimension compatibility table
 - System protection mechanisms
@@ -60,6 +70,9 @@ Embedding model switching guide with:
 
 **I need to...**
 
+- **Fix "Memory store unavailable" error** → Read OPENCODE_COMPATIBILITY.md
+- **Troubleshoot plugin loading issues** → Read OPENCODE_COMPATIBILITY.md
+- **Check OpenCode version compatibility** → Read OPENCODE_COMPATIBILITY.md
 - **Make a decision quickly** → Read FINDINGS_SUMMARY.txt
 - **See all options at a glance** → Read QUICK_REFERENCE.md
 - **Understand the full context** → Read EXTENSIBILITY_ANALYSIS.md

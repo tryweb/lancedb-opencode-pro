@@ -8,7 +8,7 @@ Complete the following steps to start using the long-term memory feature within 
 
 ## Prerequisites
 
-- [ ] OpenCode 1.2.27+ installed
+- [ ] OpenCode **1.2.27 - 1.3.7** installed *(⚠️ 1.3.8+ has known NAPI bug, see [OPENCODE_COMPATIBILITY.md](OPENCODE_COMPATIBILITY.md))*
 - [ ] Ollama installed and accessible
 - [ ] Embedding model downloaded (`nomic-embed-text`)
 
@@ -141,6 +141,8 @@ If you see `.lance` files, it means the memory has been successfully persisted.
 ---
 
 ## Troubleshooting
+
+> **⚠️ Critical Issue**: If you see "Memory store unavailable" error on OpenCode v1.3.8 or later, see [OPENCODE_COMPATIBILITY.md](OPENCODE_COMPATIBILITY.md). This is a known platform bug.
 
 ### Issue 1: Plugin Not Loaded
 
