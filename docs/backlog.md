@@ -96,7 +96,7 @@
 
 | BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
 |---|---|---|---|---|---|---|
-| BL-036 | LanceDB ANN fast-path for large scopes | P2 | planned | TBD | TBD | 當單一 scope 記憶數持續成長時，利用 LanceDB 原生向量能力作為前置篩選/快速路徑 [Surface: Plugin] |
+| BL-036 | LanceDB ANN fast-path for large scopes | P2 | planned | TBD | TBD | 新增 `LANCEDB_OPENCODE_PRO_VECTOR_INDEX_THRESHOLD` (預設 1000)；當 scope entries ≥ 閾值時自動建立 IVF_PQ 向量索引；`memory_stats` 揭露 `searchMode` 欄位；`pruneScope` 超過 `maxEntriesPerScope` 時發出警告日誌 [Surface: Plugin] |
 | BL-037 | Event table TTL / archival | P1 | planned | TBD | TBD | 為 `effectiveness_events` 建立保留期與歸檔機制，降低長期 local store 成本 [Surface: Plugin] |
 
 ## Epic 10 — 架構可維護性與效能硬化
@@ -109,7 +109,7 @@
 | BL-044 | Duplicate consolidation 擴充性重構 | P1 | **done** | bl-044-duplicate-consolidation-ann-chunking | `openspec/changes/archive/2026-03-31-bl-044-duplicate-consolidation-ann-chunking/` | 以 ANN top-k / chunking 取代全表 O(N²) 比對，避免 `consolidateDuplicates` 在大 scope 阻塞 event loop [Surface: Plugin] |
 | BL-045 | Scope cache 記憶體治理 | P1 | **done** | scope-cache-memory-governance | openspec/changes/scope-cache-memory-governance/ | `getCachedScopes` 避免全量 records/token/vector 常駐；導入 bounded/lazy/分段策略 [Surface: Plugin] |
 | BL-046 | DB row runtime 型別驗證 | P1 | **done** | episodic-record-validation | `openspec/changes/episodic-record-validation/` | 降低 `as unknown as EpisodicTaskRecord` 風險；讀取後做 schema validation [Surface: Plugin + Test-infra] |
-| BL-047 | Embedding fallback 可觀測性補強 | P2 | planned | TBD | TBD | 目前多處 embed fallback 為 silent degrade；補 structured warning + metrics，不改壞容錯語義 [Surface: Plugin + Docs] |
+| BL-047 | Embedding fallback 與搜尋模式可觀測性補強 | P2 | planned | TBD | TBD | `memory_stats` 新增 `searchMode: "in-memory-cosine" | "native-ivf"` 揭露當前向量搜尋模式；embedding fallback 保留降級語義並補 structured warning + metrics [Surface: Plugin + Docs] |
 
 ---
 
