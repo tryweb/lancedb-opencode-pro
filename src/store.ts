@@ -23,6 +23,7 @@ type LanceTable = {
     toArray(): Promise<Array<Record<string, unknown>>>;
   };
   createIndex(column: string, options?: Record<string, unknown>): Promise<void>;
+  listIndices(): Promise<Array<{ name: string }>>;
 };
 
 const TABLE_NAME = "memories";
@@ -77,6 +78,8 @@ export class MemoryStore {
     vector: false,
     fts: false,
     ftsError: "",
+    vectorRetries: 0,
+    ftsRetries: 0,
   };
   private scopeCache = new Map<string, ScopeCacheEntry>();
   private cacheConfig: ScopeCacheConfig;
@@ -1213,11 +1216,13 @@ export class MemoryStore {
     return insights;
   }
 
-  getIndexHealth(): { vector: boolean; fts: boolean; ftsError?: string } {
+  getIndexHealth(): { vector: boolean; fts: boolean; ftsError?: string; vectorRetries?: number; ftsRetries?: number } {
     return {
       vector: this.indexState.vector,
       fts: this.indexState.fts,
       ftsError: this.indexState.ftsError || undefined,
+      vectorRetries: this.indexState.vectorRetries,
+      ftsRetries: this.indexState.ftsRetries,
     };
   }
 
@@ -1959,26 +1964,88 @@ export class MemoryStore {
   private async ensureIndexes(): Promise<void> {
     const table = this.requireTable();
 
-    try {
-      await table.createIndex("vector");
+    // --- Vector index with retry and idempotency check ---
+    await this.createVectorIndexWithRetry(table);
+
+    // --- FTS index with retry and idempotency check ---
+    await this.createFtsIndexWithRetry(table);
+  }
+
+  /**
+   * Create vector index with exponential backoff retry and existence check
+   */
+  private async createVectorIndexWithRetry(table: LanceTable): Promise<void> {
+    const maxRetries = 3;
+    const baseDelay = 500;
+
+    const existingIndices = await table.listIndices();
+    if (existingIndices.some(idx => idx.name === "vector")) {
+      console.log("[store] Vector index already exists, skipping creation");
       this.indexState.vector = true;
-    } catch {
-      this.indexState.vector = false;
+      return;
     }
 
-    try {
-      if (this.lancedb && "Index" in this.lancedb) {
-        const anyLance = this.lancedb as unknown as { Index?: { fts?: () => unknown } };
-        const cfg = anyLance.Index?.fts ? { config: anyLance.Index.fts() } : undefined;
-        await table.createIndex("text", cfg as Record<string, unknown> | undefined);
-      } else {
-        await table.createIndex("text");
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      this.indexState.vectorRetries = attempt + 1;
+      try {
+        await table.createIndex("vector");
+        console.log(`[store] Vector index created successfully on attempt ${attempt + 1}`);
+        this.indexState.vector = true;
+        return;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.warn(`[store] Vector index creation failed (attempt ${attempt + 1}/${maxRetries}): ${errorMsg}. Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          console.error(`[store] Vector index creation failed after ${maxRetries} attempts: ${errorMsg}. Falling back to in-memory search.`);
+          this.indexState.vector = false;
+        }
       }
+    }
+  }
+
+  /**
+   * Create FTS index with exponential backoff retry and existence check
+   */
+  private async createFtsIndexWithRetry(table: LanceTable): Promise<void> {
+    const maxRetries = 3;
+    const baseDelay = 500;
+
+    const existingIndices = await table.listIndices();
+    if (existingIndices.some(idx => idx.name === "text")) {
+      console.log("[store] FTS index already exists, skipping creation");
       this.indexState.fts = true;
-      this.indexState.ftsError = "";
-    } catch (error) {
-      this.indexState.fts = false;
-      this.indexState.ftsError = error instanceof Error ? error.message : String(error);
+      return;
+    }
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      this.indexState.ftsRetries = attempt + 1;
+      try {
+        if (this.lancedb && "Index" in this.lancedb) {
+          const anyLance = this.lancedb as unknown as { Index?: { fts?: () => unknown } };
+          const cfg = anyLance.Index?.fts ? { config: anyLance.Index.fts() } : undefined;
+          await table.createIndex("text", cfg as Record<string, unknown> | undefined);
+        } else {
+          await table.createIndex("text");
+        }
+        console.log(`[store] FTS index created successfully on attempt ${attempt + 1}`);
+        this.indexState.fts = true;
+        this.indexState.ftsError = "";
+        return;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.warn(`[store] FTS index creation failed (attempt ${attempt + 1}/${maxRetries}): ${errorMsg}. Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          console.error(`[store] FTS index creation failed after ${maxRetries} attempts: ${errorMsg}. Falling back to vector-only search.`);
+          this.indexState.fts = false;
+          this.indexState.ftsError = errorMsg;
+        }
+      }
     }
   }
 

@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ### Changed
 
+- **Index Creation Resilience** (internal-only):
+  - Added retry logic with exponential backoff (3 attempts: 500ms, 1s, 2s) to handle transient LanceDB index creation conflicts
+  - Added idempotency check using `table.listIndices()` before attempting index creation
+  - Added structured logging for index creation attempts and failures
+  - Added `vectorRetries` and `ftsRetries` tracking to `indexState` for observability
+  - Extended `getIndexHealth()` to return retry counts
+  - Evidence:
+    - Spec: openspec/changes/bl-048-lancedb-index-recovery/
+    - Code: src/store.ts (createVectorIndexWithRetry, createFtsIndexWithRetry)
+    - Surface: internal-api
+
 - **Duplicate Consolidation Performance** (internal-only):
   - Replaced O(N²) pairwise comparison with O(N×k) ANN-based candidate retrieval
   - Added chunked processing (BATCH_SIZE=100) with setImmediate yield points to prevent event loop blocking
