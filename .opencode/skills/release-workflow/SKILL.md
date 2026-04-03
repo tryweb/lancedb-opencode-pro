@@ -2,10 +2,10 @@
 name: release-workflow
 description: Hardened release workflow for lancedb-opencode-pro. Use when publishing a new npm version and when you must prevent claim/code/spec drift.
 license: MIT
-compatibility: Requires git, gh, docker compose, and npm CLI.
+compatibility: Requires git, gh at /home/linuxbrew/.linuxbrew/bin/gh, docker compose, and npm CLI.
 metadata:
   author: tryweb
-  version: "2.1"
+  version: "2.5"
   generatedBy: "manual"
 ---
 
@@ -17,6 +17,20 @@ This version adds mandatory anti-drift gates so we do not repeat:
 - changelog claim without shipped code
 - implemented store APIs without runtime operability
 - spec requirement without test evidence
+
+**Version 2.5 adds automatic README Version History pruning (keeps latest 5 versions)**
+
+---
+
+## IMPORTANT: PATH Setup
+
+`gh` is installed at `/home/linuxbrew/.linuxbrew/bin/gh` but may not be in PATH. Always use:
+
+```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+```
+
+Add this before any `gh` commands in this workflow.
 
 ---
 
@@ -48,6 +62,7 @@ Pass conditions:
 - Working tree is clean
 - Intended feature branches are already merged to `origin/main`
 - npm account is available (`npm whoami` succeeds)
+- `gh` is available (use `export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"` if needed)
 
 Hard rules:
 - Never start release from `feat/*` or `fix/*`
@@ -164,18 +179,189 @@ If feature is internal-only, changelog wording must explicitly say "internal API
 
 ---
 
-## Phase 4 — Version & Changelog
+## Phase 4 — Version & Changelog + README
 
 ```bash
 # After gates pass, update version and changelog
 # package.json version
 # CHANGELOG.md: only claims with evidence
+# README.md + README_zh.md: update Version History (keep latest 5 versions)
+```
+
+**Why update README at Release time (not at backlog-complete-merge):**
+1. Consistency with package.json and CHANGELOG.md
+2. Accuracy - shows only published versions
+3. No "merged but not released" gap
+
+**Size Management Policy:**
+- README Version History keeps only latest 5 versions
+- Older entries removed with note pointing to CHANGELOG.md
+- Prevents unbounded file growth across many releases
+
+**Update Steps:**
+
+```bash
+VERSION="0.6.1"
+
+# 1. Update CHANGELOG.md (add new version block at top)
+# 2. Update Latest Version and Last Updated in README.md
+sed -i "s/\*\*Latest Version\*\*: v[0-9.]*/\*\*Latest Version\*\*: v${VERSION}/" README.md
+sed -i "s/\*\*最新版本\*\*: v[0-9.]*/\*\*最新版本\*\*: v${VERSION}/" README_zh.md
+sed -i "s/\*\*Last Updated\*\*: [0-9-]*/\*\*Last Updated\*\*: $(date +%Y-%m-%d)/" README.md
+sed -i "s/\*\*最後更新\*\*: [0-9-]*/\*\*最後更新\*\*: $(date +%Y-%m-%d)/" README_zh.md
+
+# 3. Extract features from CHANGELOG for the new version
+# Get first 5 feature lines (skip "Changed" sections for brevity)
+FEATURES=$(sed -n "/^\[${VERSION}\]/,/^---/p" CHANGELOG.md | grep "^### Added" -A 3 | grep "^-" | head -5 | sed 's/^- *//' | tr '\n' ',' | sed 's/,$//')
+if [ -z "$FEATURES" ]; then
+  FEATURES=$(sed -n "/^\[${VERSION}\]/,/^---/p" CHANGELOG.md | grep "^###" | head -3 | sed 's/### //' | tr '\n' ',' | sed 's/,$//')
+fi
+
+# 4. Add new version to top of Version History
+# Insert new version after "- **v0.X.Y**:" line, update the old top version
+sed -i "0,/- \*\*v[0-9.]*\*\*:.*/s/- \*\*v[0-9.]*\*\*:.*/- **v${VERSION}**: ${FEATURES}\n&/" README.md
+sed -i "0,/- \*\*v[0-9.]*\*\*:.*/s/- \*\*v[0-9.]*\*\*:.*/- **v${VERSION}**: ${FEATURES}\n&/" README_zh.md
+
+# 5. Prune to keep only latest 5 versions
+# Count version lines and remove excess
+python3 -c "
+import re, sys
+with open('README.md', 'r') as f:
+    lines = f.readlines()
+
+new_lines = []
+version_count = 0
+skip_marker = False
+for line in lines:
+    if re.match(r'^-\s+\*\*v[\d.]+\*\*:', line):
+        version_count += 1
+        if version_count == 6:
+            # Insert skip notice before 6th version
+            new_lines.append('\n_[older versions removed - see [CHANGELOG.md](CHANGELOG.md) for full history]\n')
+            skip_marker = True
+        if skip_marker:
+            continue  # skip lines until we hit a non-version line
+    new_lines.append(line)
+
+with open('README.md', 'w') as f:
+    f.writelines(new_lines)
+"
+
+# Same for README_zh.md
+python3 -c "
+import re, sys
+with open('README_zh.md', 'r') as f:
+    lines = f.readlines()
+
+new_lines = []
+version_count = 0
+skip_marker = False
+for line in lines:
+    if re.match(r'^-\s+\*\*v[\d.]+\*\*:', line):
+        version_count += 1
+        if version_count == 6:
+            new_lines.append('\n_[旧版历史请参阅 [CHANGELOG.md](CHANGELOG.md)]_\n')
+            skip_marker = True
+        if skip_marker:
+            continue
+    new_lines.append(line)
+
+with open('README_zh.md', 'w') as f:
+    f.writelines(new_lines)
+"
+
+# 6. Commit all together
+git add package.json CHANGELOG.md README.md README_zh.md
+```
+
+**Result example:**
+```markdown
+## 🗺️ Version History
+
+- **v0.6.1**: Event TTL/Archival, Index Creation Resilience
+- **v0.6.0**: Learning Dashboard, KPI Pipeline...
+- **v0.5.0**: Memory Explanation Tools...
+- **v0.4.0**: Citation Model...
+- **v0.3.0**: Episodic Learning Hooks
+
+_[older versions removed - see CHANGELOG.md for full history]_
 ```
 
 Commit message format:
 ```
 chore: bump version to X.Y.Z and update changelog
 ```
+
+---
+
+## Phase 4.5 — Generate Release Note
+
+**Goal**: Automatically generate GitHub Release Note from CHANGELOG.md content.
+
+GitHub Actions `softprops/action-gh-release` supports `--generate-notes` but this uses GitHub's auto-generated format. For more control, extract from CHANGELOG.md:
+
+### Option A: GitHub Auto-Generated (Recommended for simplicity)
+
+Update CI workflow to use `--generate-notes`:
+
+```yaml
+# In .github/workflows/ci.yml, update verify-full-release job:
+- name: Publish GitHub release asset
+  uses: softprops/action-gh-release@v2
+  with:
+    files: lancedb-opencode-pro.tgz
+    generate_release_notes: true  # ADD THIS LINE
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### Option B: Manual Extraction (More Control)
+
+Generate release note from CHANGELOG.md:
+
+```bash
+# Extract version block from CHANGELOG.md
+# This script extracts content between "## [X.Y.Z]" and the next "##"
+
+VERSION="0.6.1"
+RELEASE_NOTE=$(sed -n "/^\[${VERSION}\]/,/^## /p" CHANGELOG.md | sed '$ d' | sed 's/^##.*//' | sed 's/^--.*//' | sed '/^$/d')
+
+echo "$RELEASE_NOTE" > .github/release-note.txt
+
+# Now use this in PR body or manual release
+cat .github/release-note.txt
+```
+
+### Option C: Use in PR Body (Recommended for this project)
+
+Update Phase 6 PR body to include CHANGELOG excerpt:
+
+```bash
+# Generate PR body with changelog content
+VERSION="0.6.1"
+PR_BODY=$(cat <<EOF
+## Release ${VERSION}
+
+$(sed -n "/^\[${VERSION}\]/,/^## /p" CHANGELOG.md | sed '$ d' | tail -n +3)
+
+### Verification
+- [ ] CI verify passes
+- [ ] npm publish succeeds
+- [ ] GitHub Release created
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+EOF
+)
+
+# Create PR with this body
+gh pr create \
+  --title "chore: release v${VERSION}" \
+  --body "$PR_BODY" \
+  --base main \
+  --head release/v${VERSION}
+```
+
+**IMPORTANT**: For GitHub Release to have a body when created by CI, use Option A (update CI workflow).
 
 ---
 
@@ -220,6 +406,8 @@ If changelog mentions a capability without matching code/tests in the PR, fix ch
 ### Merge Steps
 
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 gh pr create \
   --title "chore: release vX.Y.Z" \
   --body "Bump version to X.Y.Z. See CHANGELOG.md for details." \
@@ -230,6 +418,8 @@ gh pr create \
 Wait for `verify` CI check to pass, then merge:
 
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 gh pr merge <PR_NUMBER> --squash --delete-branch
 git checkout main && git pull origin main
 ```
@@ -318,15 +508,42 @@ This triggers the `verify-full-release` GitHub Actions workflow, which:
 2. Packs the `.tgz`
 3. Uploads artifact
 4. Publishes to npm via `NPM_TOKEN`
-5. Creates GitHub Release with `.tgz` asset
+5. Creates GitHub Release with `.tgz` asset **and auto-generated notes**
+
+**IMPORTANT**: To have Release Notes in GitHub Release, update `.github/workflows/ci.yml`:
+
+```yaml
+# Find and update this section in verify-full-release job:
+- name: Publish GitHub release asset
+  uses: softprops/action-gh-release@v2
+  with:
+    files: lancedb-opencode-pro.tgz
+    generate_release_notes: true  # ADD THIS
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Or for manual release notes:
+
+```yaml
+- name: Publish GitHub release asset
+  uses: softprops/action-gh-release@v2
+  with:
+    files: lancedb-opencode-pro.tgz
+    body_path: .github/release-note.txt  # Use pre-generated file
+```
+
+Then generate the file in Phase 4.5.
 
 Monitor with:
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 gh run watch <run-id> --interval 30
 ```
 
 Or list recent runs:
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 gh run list --workflow=ci.yml --limit=5
 ```
 
@@ -335,6 +552,8 @@ gh run list --workflow=ci.yml --limit=5
 ## Phase 8 — Post-Release Verification
 
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 # Confirm npm version is live
 npm view lancedb-opencode-pro name version
 
@@ -369,6 +588,8 @@ git diff vX.Y.Z-1..vX.Y.Z --stat
 If release is missing code:
 
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 # 1. Create fix branch with all changes
 git checkout -b fix/release-fix
 git add src/ test/ openspec/
@@ -438,6 +659,8 @@ Branch protection requires PR + `verify` status check. Always use a branch + PR 
 If you temporarily disabled protection to hotfix, restore it after:
 
 ```bash
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 gh api repos/tryweb/lancedb-opencode-pro/branches/main/protection \
   --method PUT \
   --header "Accept: application/vnd.github+json" \
@@ -474,10 +697,20 @@ docker compose exec opencode-dev npm run release:check
 rg "^[[:space:]]*[a-z0-9_]+:\s*tool\(" src/index.ts
 git diff --name-only main..HEAD
 
-# Phase 4 — version bump
+# Phase 4 — version bump + README update
+VERSION="0.6.1"
 # Edit package.json + CHANGELOG.md, then:
-git add package.json CHANGELOG.md
+# Update Latest Version in README.md and README_zh.md
+sed -i "s/\*\*Latest Version\*\*: v[0-9.]*/\*\*Latest Version\*\*: v${VERSION}/" README.md
+sed -i "s/\*\*最新版本\*\*: v[0-9.]*/\*\*最新版本\*\*: v${VERSION}/" README_zh.md
+# Add new version to top of Version History
+git add package.json CHANGELOG.md README.md README_zh.md
 git commit -m "chore: bump version to X.Y.Z and update changelog"
+
+# Phase 4.5 — generate release note (optional, for GitHub Release)
+# Option A: Use GitHub auto-generated (just update ci.yml with generate_release_notes: true)
+# Option B: Extract from CHANGELOG.md manually
+sed -n "/^\[${VERSION}\]/,/^## /p" CHANGELOG.md | sed '$ d' | tail -n +3 > .github/release-note.txt
 
 # Phase 5 — release branch
 git checkout -b release/vX.Y.Z
@@ -514,3 +747,5 @@ Release can be declared complete only if all are true:
 4. Tag points to merged implementation commit, not version-only commit
 5. Post-release verification confirms npm + GitHub Release
 6. `origin/release/vX.Y.Z` has been deleted (or explicitly cleaned up and pruned)
+7. **GitHub Release has Release Notes** (ensure `generate_release_notes: true` in CI or use `body_path`)
+8. **README.md and README_zh.md Version History updated** (Latest Version matches published version)

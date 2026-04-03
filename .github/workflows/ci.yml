@@ -160,6 +160,7 @@ jobs:
         with:
           files: lancedb-opencode-pro.tgz
           fail_on_unmatched_files: true
+          generate_release_notes: true
 
       - name: Tear down
         if: always()
