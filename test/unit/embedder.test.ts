@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getEmbedderHealth, setEmbedderHealth, resetEmbedderHealth } from "../../src/embedder.js";
-import type { EmbeddingConfig, Embedder } from "../../src/embedder.js";
+import { getEmbedderHealth, setEmbedderHealth, resetEmbedderHealth, type Embedder } from "../../src/embedder.js";
+import type { EmbeddingConfig } from "../../src/types.js";
 
 test("getEmbedderHealth: returns default healthy state", () => {
   resetEmbedderHealth();
