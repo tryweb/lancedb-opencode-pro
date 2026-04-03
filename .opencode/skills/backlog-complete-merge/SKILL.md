@@ -92,11 +92,94 @@ Proceed to Phase 2.
 ### Run unit tests
 
 ```bash
+bun test
+```
+
+**Pass conditions**: All unit tests exit 0.
+
+If `bun` is not available, try:
+
+```bash
+npm install && npm test
+```
+
+Or with Docker:
+
+```bash
 docker compose build --no-cache && docker compose up -d
 docker compose exec opencode-dev npm run test:unit
 ```
 
 **Pass conditions**: All unit tests exit 0.
+
+### Run TypeScript verification (CRITICAL)
+
+**Goal**: Catch TypeScript errors BEFORE pushing to CI.
+
+This prevents CI failures due to:
+- Missing type exports (TS2305: Module has no exported member)
+- Import path errors (TS2459: Module declares locally but is not exported)
+- Missing type definitions (TS2304: Cannot find name)
+
+```bash
+# Run TypeScript type check
+bun tsc --noEmit 2>&1 | head -50
+
+# Or with npm
+npx tsc --noEmit 2>&1 | head -50
+
+# Or check specific files that were modified
+git diff --name-only HEAD | xargs -I {} bun tsc --noEmit {} 2>&1
+```
+
+**Pass conditions**: No TypeScript errors.
+
+**If TypeScript errors found**:
+- Check if any type exports were accidentally removed (search for `export type`)
+- Verify all imports reference correct modules
+- Look for duplicate interface definitions
+- Run tests to confirm fix works: `bun test test/unit/<module>.test.ts`
+
+### Common TypeScript Issues and Fixes
+
+#### Issue: Missing type exports (TS2305)
+
+```bash
+# Check for removed exports in types.ts
+git diff HEAD~1 -- src/types.ts | grep "^-export"
+```
+
+**Fix**: Restore missing exports at the top of types.ts:
+
+```typescript
+export type RetrievalMode = "hybrid" | "vector";
+export type InjectionMode = "fixed" | "budget" | "adaptive";
+export type SummarizationMode = "none" | "truncate" | "extract" | "auto";
+export type CodeTruncationMode = "smart" | "signature" | "preserve";
+export type ContentType = "text" | "code" | "mixed";
+export interface ContentDetection {
+  hasCode: boolean;
+  isPureCode: boolean;
+}
+```
+
+#### Issue: Wrong import path (TS2459)
+
+```bash
+# Check for import errors
+git diff HEAD~1 -- test/ | grep "import.*from"
+```
+
+**Fix**: Ensure imports reference correct modules:
+
+```typescript
+// ❌ Wrong: import from embedder.js
+import type { EmbeddingConfig } from "../../src/embedder.js";
+
+// ✅ Correct: import from types.js
+import type { EmbeddingConfig } from "../../src/types.js";
+import type { Embedder } from "../../src/embedder.js";
+```
 
 ### Run E2E tests (if applicable)
 
@@ -364,6 +447,10 @@ git rev-parse --abbrev-ref --symbolic-full-name @{upstream}
 openspec verify-change "<change-id>"
 
 # Phase 2 — tests
+bun test
+# TypeScript type check (CRITICAL - run before push!)
+bun tsc --noEmit 2>&1 | head -50
+# Docker tests (alternative)
 docker compose build --no-cache && docker compose up -d
 docker compose exec opencode-dev npm run test:unit
 docker compose exec opencode-dev npm run test:e2e
