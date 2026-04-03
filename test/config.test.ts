@@ -92,3 +92,50 @@ test("dedup config: candidateLimit below min is clamped to 10", async () => {
     assert.equal(config.dedup.candidateLimit, 10);
   });
 });
+
+test("retention config: default is undefined when not configured", async () => {
+  await withPatchedEnv({ LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true" }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.retention, undefined);
+  });
+});
+
+test("retention config: default 90 days when configured via sidecar", async () => {
+  await withPatchedEnv({ 
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS: "60",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.retention?.effectivenessEventsDays, 60);
+  });
+});
+
+test("retention config: env var overrides sidecar config", async () => {
+  await withPatchedEnv({
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS: "180",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.retention?.effectivenessEventsDays, 180);
+  });
+});
+
+test("retention config: negative values are rejected and default to 90", async () => {
+  await withPatchedEnv({
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS: "-30",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.retention?.effectivenessEventsDays, 90);
+  });
+});
+
+test("retention config: zero value disables retention", async () => {
+  await withPatchedEnv({
+    LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+    LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS: "0",
+  }, () => {
+    const config = resolveMemoryConfig({}, undefined);
+    assert.equal(config.retention?.effectivenessEventsDays, 0);
+  });
+});

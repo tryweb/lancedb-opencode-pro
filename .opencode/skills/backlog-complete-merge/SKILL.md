@@ -2,10 +2,10 @@
 name: backlog-complete-merge
 description: Verify BL completion, run tests, archive change, resolve conflicts, and create PR. Use when a developer believes a backlog item implementation is complete.
 license: MIT
-compatibility: Requires openspec CLI, git, gh, docker compose.
+compatibility: Requires openspec CLI at /home/devuser/.bun/bin/openspec, git, gh.
 metadata:
   author: tryweb
-  version: "1.0"
+  version: "1.2"
   generatedBy: "manual"
 ---
 
@@ -60,19 +60,19 @@ git checkout feat/<change-id>
 
 ## Phase 1 — OpenSpec Verification
 
-**Goal**: Verify implementation matches change artifacts using /opsx-verify.
+**Goal**: Verify implementation matches change artifacts using openspec.
 
-Run verification via the /opsx-verify command (internally uses `openspec verify-change`):
+Run verification via openspec:
 
 ```bash
-openspec status --change "<change-id>" --json
-openspec verify-change "<change-id>"
-```
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
 
-Or simply use:
+# Check status
+$OPENSPEC status --change "<change-id>"
 
-```
-/opsx-verify <change-id>
+# Validate (preferred - checks all requirements)
+$OPENSPEC validate "<change-id>"
 ```
 
 ### If verification passes:
@@ -103,15 +103,6 @@ If `bun` is not available, try:
 npm install && npm test
 ```
 
-Or with Docker:
-
-```bash
-docker compose build --no-cache && docker compose up -d
-docker compose exec opencode-dev npm run test:unit
-```
-
-**Pass conditions**: All unit tests exit 0.
-
 ### Run TypeScript verification (CRITICAL)
 
 **Goal**: Catch TypeScript errors BEFORE pushing to CI.
@@ -122,17 +113,14 @@ This prevents CI failures due to:
 - Missing type definitions (TS2304: Cannot find name)
 
 ```bash
-# Run TypeScript type check
-bun tsc --noEmit 2>&1 | head -50
-
-# Or with npm
-npx tsc --noEmit 2>&1 | head -50
+# Run TypeScript build/type check
+bun run build
 
 # Or check specific files that were modified
 git diff --name-only HEAD | xargs -I {} bun tsc --noEmit {} 2>&1
 ```
 
-**Pass conditions**: No TypeScript errors.
+**Pass conditions**: No TypeScript errors (command exits 0).
 
 **If TypeScript errors found**:
 - Check if any type exports were accidentally removed (search for `export type`)
@@ -237,16 +225,14 @@ git diff main..HEAD -- "*.json" -- "*.yaml" -- "*.yml"
 
 **Goal**: Archive the OpenSpec change.
 
-Archive via `/opsx-archive` command (internally uses `openspec archive-change`):
+Archive via openspec:
 
 ```bash
-openspec archive-change "<change-id>"
-```
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
 
-Or simply use:
-
-```
-/opsx-archive <change-id>
+# Archive the change (skip confirmation with -y)
+$OPENSPEC archive "<change-id>" -y
 ```
 
 This moves the change to archive with date prefix.
@@ -377,7 +363,12 @@ git push origin <branch>
 
 **Goal**: Create a PR to merge the branch to main.
 
+**Note**: `gh` is installed at `/home/linuxbrew/.linuxbrew/bin/gh` and needs to be in PATH. Ensure PATH includes this or use full path.
+
 ```bash
+# Ensure gh is available in PATH (if not, use full path)
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 # Get branch name
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
@@ -390,9 +381,9 @@ gh pr create \
 - Documentation updated
 
 ## Verification
-- openspec verify-change: passed
+- openspec validate: passed
 - Unit tests: passed
-- E2E tests: passed (if applicable)
+- Build: passed
 
 ## Changes
 $(git diff main --stat)" \
@@ -439,27 +430,30 @@ git fetch --prune
 ## Quick Reference — All Commands
 
 ```bash
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+
+# Ensure gh is available (if PATH doesn't include it)
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
 # Phase 0 — branch validation
 git rev-parse --abbrev-ref HEAD
 git rev-parse --abbrev-ref --symbolic-full-name @{upstream}
 
 # Phase 1 — verification
-openspec verify-change "<change-id>"
+$OPENSPEC validate "<change-id>"
+$OPENSPEC status --change "<change-id>"
 
 # Phase 2 — tests
 bun test
 # TypeScript type check (CRITICAL - run before push!)
-bun tsc --noEmit 2>&1 | head -50
-# Docker tests (alternative)
-docker compose build --no-cache && docker compose up -d
-docker compose exec opencode-dev npm run test:unit
-docker compose exec opencode-dev npm run test:e2e
+bun run build
 
 # Phase 3 — documentation check
 git diff main..HEAD -- "*.md"
 
 # Phase 4 — archive
-openspec archive-change "<change-id>"
+$OPENSPEC archive "<change-id>" -y
 
 # Phase 4.5 — backlog status update (after archive)
 rg "<change-id>" docs/backlog.md

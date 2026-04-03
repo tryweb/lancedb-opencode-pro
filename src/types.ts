@@ -145,6 +145,9 @@ export interface MemoryRuntimeConfig {
   unusedDaysThreshold: number;
   minCaptureChars: number;
   maxEntriesPerScope: number;
+  retention?: {
+    effectivenessEventsDays: number;
+  };
 }
 
 export type MemoryStatus = "active" | "disabled" | "merged";

@@ -240,35 +240,77 @@ The system uses the following multipliers to estimate tokens:
 1. **Marking (at Write)**: New memories are compared with existing ones. If similarity ≥ `writeThreshold`, it is marked `isPotentialDuplicate: true`.
 2. **Consolidation (Background)**: Triggered by `session.compacted` events, automatically merges memory pairs with similarity ≥ `consolidateThreshold`.
 
-### Manual Consolidation
+---
 
-```text
-# Consolidate duplicate memories within a single scope
-memory_consolidate scope="project:your-project" confirm=true
+## Retention Settings (v0.6.1+)
 
-# Consolidate all duplicate memories across all scopes
-memory_consolidate_all confirm=true
-```
+### Configuration
 
-### Tuning Recommendations
-
-**Strict Deduplication** (Reduce Storage):
 ```json
 {
-  "dedup": {
-    "writeThreshold": 0.88,
-    "consolidateThreshold": 0.92
+  "retention": {
+    "effectivenessEventsDays": 90
   }
 }
 ```
 
-**Lenient Deduplication** (Preserve Details):
+### Parameters Overview
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `effectivenessEventsDays` | `90` | Number of days to retain effectiveness events. Set to `0` to disable automatic cleanup. |
+
+### Environment Variable
+
+You can also configure this via environment variable:
+
+```bash
+export LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS=90
+```
+
+### Behavior
+
+- **Automatic Cleanup**: When the plugin initializes, events older than the retention period are automatically deleted
+- **Manual Cleanup**: Use the `memory_event_cleanup` tool to manually trigger cleanup or export events before deletion
+- **Scope Support**: Cleanup can be scoped to project or global events
+- **Dry Run**: Use `dryRun: true` to preview events that would be deleted without actually deleting them
+
+### Tools
+
+#### memory_stats
+
+The `memory_stats` tool now includes TTL information:
+
 ```json
 {
-  "dedup": {
-    "writeThreshold": 0.95,
-    "consolidateThreshold": 0.98
+  "eventTtl": {
+    "enabled": true,
+    "retentionDays": 90,
+    "expiredCount": 150,
+    "scopeBreakdown": {
+      "project:my-project": 100,
+      "global": 50
+    }
   }
+}
+```
+
+#### memory_event_cleanup
+
+Clean up expired events manually:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `scope` | string | - | Optional scope filter |
+| `dryRun` | boolean | false | Preview without deleting |
+| `archivePath` | string | - | Optional path to export JSON before deletion |
+
+Example:
+
+```json
+{
+  "scope": "project:my-project",
+  "dryRun": true
 }
 ```
 

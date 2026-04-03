@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-04-03
+title: "BL-037: Event Table TTL / Archival"
+summary: "為 effectiveness_events 建立保留期與歸檔機制，降低長期 local store 成本"
+changelogWording: "user-facing"

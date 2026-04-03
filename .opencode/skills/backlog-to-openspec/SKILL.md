@@ -2,10 +2,10 @@
 name: backlog-to-openspec
 description: Convert backlog items into implementation-ready OpenSpec changes with explicit runtime surface, acceptance criteria, and E2E verification requirements.
 license: MIT
-compatibility: Requires openspec CLI.
+compatibility: Requires openspec CLI at /home/devuser/.bun/bin/openspec.
 metadata:
   author: tryweb
-  version: "1.2"
+  version: "2.0"
   generatedBy: "manual"
 ---
 
@@ -14,6 +14,8 @@ metadata:
 Use this skill when backlog items are still high-level and you need a spec that engineers can implement and verify without ambiguity.
 
 This skill prevents "spec says done, runtime not operable" drift.
+
+**Key Design**: Uses `openspec instructions` to dynamically retrieve templates from the OpenSpec CLI, ensuring compatibility even when OpenSpec versions change.
 
 ---
 
@@ -53,6 +55,9 @@ And enforce these sections in artifacts:
 Run this gate before `openspec new change`:
 
 ```bash
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+
 # 1) working tree must be clean
 git status --porcelain
 
@@ -112,8 +117,14 @@ rg "BL-0|BL-1|BL-2|BL-3" docs/backlog.md
 ## Phase 2 — Create OpenSpec Change Scaffold
 
 ```bash
-openspec new change "<kebab-case-change-id>"
-openspec status --change "<kebab-case-change-id>" --json
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+
+# Create change
+$OPENSPEC new change "<kebab-case-change-id>"
+
+# Verify status
+$OPENSPEC status --change "<kebab-case-change-id>" --json
 ```
 
 If a related archived change already exists, reuse patterns but do not copy stale assumptions.
@@ -152,83 +163,198 @@ git push origin "feat/${CHANGE_ID}" -u
 
 ---
 
-## Phase 3 — Write Proposal (What/Why)
+## Phase 3 — Write Proposal (What/Why) using Dynamic Template
 
-In `proposal.md`, include:
+**CRITICAL**: Use `openspec instructions` to get the latest template instead of hardcoding.
 
-- Problem statement linked to backlog IDs
-- Why now (risk/cost of not doing)
-- Scope and non-goals
-- Impacted modules
-- Release impact type (`internal-only` vs `user-facing`)
+```bash
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+CHANGE_ID="<kebab-case-change-id>"
 
-**Hard rule**: if proposal claims user-facing capability, it must later map to an explicit runtime entrypoint and e2e scenario.
+# Get dynamic instructions and template
+$OPENSPEC instructions proposal --change "$CHANGE_ID" --json
+```
+
+This returns JSON with:
+- `instruction`: Schema-specific guidance
+- `template`: The template to use for the output file
+
+**Steps**:
+
+1. Run `$OPENSPEC instructions proposal --change "$CHANGE_ID" --json`
+2. Read the `template` field - this is your structure
+3. Fill in the template using Phase 1 analysis
+4. Write to `openspec/changes/<change-id>/proposal.md`
+
+**The template will look something like**:
+
+```markdown
+## Why
+
+<!-- Explain the motivation for this change. What problem does this solve? Why now? -->
+
+## What Changes
+
+<!-- Describe what will change. Be specific about new capabilities, modifications, or removals. -->
+
+## Capabilities
+
+### New Capabilities
+- `<name>`: <brief description of what this capability covers>
+
+### Modified Capabilities
+- <existing-capability>: <what requirement is changing>
+
+## Impact
+
+<!-- Affected code, APIs, dependencies, systems -->
+```
+
+**Key guidance from `instruction`**:
+- Focus on "why" not "how" - implementation details belong in design.md
+- Keep it concise (1-2 pages)
+- The Capabilities section is critical - it creates the contract between proposal and specs
 
 ---
 
-## Phase 4 — Write Design (How)
+## Phase 4 — Write Design (How) using Dynamic Template
 
-In `design.md`, include mandatory decision table:
+**CRITICAL**: Use `openspec instructions` to get the latest template.
 
-| Decision | Choice | Why | Trade-off |
-|---|---|---|---|
-| Runtime surface | internal-api / opencode-tool / hook-driven | ... | ... |
-| Entrypoint | exact file + symbol/hook | ... | ... |
-| Data model | table/record changes | ... | ... |
-| Failure handling | retry/stop/escalate | ... | ... |
-| Observability | logs/events/metrics | ... | ... |
+```bash
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+CHANGE_ID="<kebab-case-change-id>"
 
-Also add **Operability section**:
-- Trigger path (how behavior is activated)
-- Expected visible output
-- Misconfiguration/failure behavior
+# Get dynamic instructions and template
+$OPENSPEC instructions design --change "$CHANGE_ID" --json
+```
 
----
+**Steps**:
 
-## Phase 5 — Write Specs (Verifiable Requirements)
+1. Run `$OPENSPEC instructions design --change "$CHANGE_ID" --json`
+2. Read the `template` field
+3. Read the proposal you just created (`proposal.md`) for context
+4. Fill in the template
+5. Write to `openspec/changes/<change-id>/design.md`
 
-For each requirement in `specs/*/spec.md`, enforce:
+**The template will look something like**:
 
-1. Requirement sentence (`The system SHALL ...`)
-2. Runtime Surface + Entrypoint note
-3. Positive scenario(s)
-4. Negative/error scenario(s)
-5. Observability scenario (what can be inspected)
+```markdown
+## Context
 
-Example requirement extension pattern:
+<!-- Background and current state -->
 
-```text
-### Requirement: Similar task recall is operable via runtime surface
-The system SHALL recall similar tasks before execution.
+## Goals / Non-Goals
 
-Runtime Surface: hook-driven
-Entrypoint: src/index.ts -> event hook "session.idle"
+**Goals:**
+<!-- What this design aims to achieve -->
 
-#### Scenario: Recall injected on threshold match
-- WHEN ...
-- THEN ...
+**Non-Goals:**
+<!-- What is explicitly out of scope -->
 
-#### Scenario: No recall when below threshold
-- WHEN ...
-- THEN ...
+## Decisions
+
+<!-- Key design decisions and rationale -->
+
+## Risks / Trade-offs
+
+<!-- Known risks and trade-offs -->
 ```
 
 ---
 
-## Phase 6 — Build Tasks with Verification Matrix
+## Phase 5 — Write Specs (Verifiable Requirements) using Dynamic Template
 
-In `tasks.md`, tasks must be atomic and include verification hooks:
+**CRITICAL**: This is where we MUST use dynamic templates. Run:
 
-```text
-- [ ] Implement runtime wiring in src/index.ts (hook/tool registration)
-- [ ] Implement core logic in src/store.ts
-- [ ] Add unit tests for edge conditions
-- [ ] Add integration test for runtime entrypoint
-- [ ] Add e2e test for user-facing flow (if user-facing)
-- [ ] Update changelog wording class (internal-only/user-facing)
+```bash
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+CHANGE_ID="<kebab-case-change-id>"
+
+# Get dynamic instructions and template for specs
+$OPENSPEC instructions specs --change "$CHANGE_ID" --json
 ```
 
-Mandatory matrix (add to tasks.md or design.md):
+**Steps**:
+
+1. Run `$OPENSPEC instructions specs --change "$CHANGE_ID" --json`
+2. Read the `template` field - **this is the authoritative format**
+3. Read `proposal.md` to identify capabilities (from Capabilities section)
+4. For each capability, create `specs/<capability-name>/spec.md`
+
+**The template will look something like**:
+
+```markdown
+## ADDED Requirements
+
+### Requirement: <!-- requirement name -->
+<!-- requirement text -->
+
+#### Scenario: <!-- scenario name -->
+- **WHEN** <!-- condition -->
+- **THEN** <!-- expected outcome -->
+```
+
+**Key rules from `instruction`** (IMPORTANT - follow these, not hardcoded rules):
+
+1. Use `## ADDED Requirements` (or MODIFIED/REMOVED/RENAMED) as delta header
+2. Each requirement: `### Requirement: <name>` followed by description
+3. Use SHALL/MUST for normative requirements
+4. **Each scenario MUST use exactly 4 hashtags (`####`)** - Using 3 will fail validation
+5. Every requirement MUST have at least one scenario
+
+**Example from the instruction**:
+
+```markdown
+## ADDED Requirements
+
+### Requirement: User can export data
+The system SHALL allow users to export their data in CSV format.
+
+#### Scenario: Successful export
+- **WHEN** user clicks "Export" button
+- **THEN** system downloads a CSV file with all user data
+```
+
+---
+
+## Phase 6 — Build Tasks with Verification Matrix using Dynamic Template
+
+**CRITICAL**: Use `openspec instructions` to get the latest template.
+
+```bash
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+CHANGE_ID="<kebab-case-change-id>"
+
+# Get dynamic instructions and template for tasks
+$OPENSPEC instructions tasks --change "$CHANGE_ID" --json
+```
+
+**Steps**:
+
+1. Run `$OPENSPEC instructions tasks --change "$CHANGE_ID" --json`
+2. Read the `template` field
+3. Read all completed artifacts (proposal, design, specs) for context
+4. Fill in the template with implementation tasks
+5. Write to `openspec/changes/<change-id>/tasks.md`
+
+**The template will look something like**:
+
+```markdown
+## 1. <!-- Task Group Name -->
+
+- [ ] 1.1 <!-- Task description -->
+- [ ] 1.2 <!-- Task description -->
+
+## 2. <!-- Task Group Name -->
+
+- [ ] 2.1 <!-- Task description -->
+- [ ] 2.2 <!-- Task description -->
+```
+
+**Include Verification Matrix**:
+
+Add this table to tasks.md or design.md:
 
 | Requirement | Unit | Integration | E2E | Required to release |
 |---|---|---|---|---|
@@ -237,12 +363,58 @@ Mandatory matrix (add to tasks.md or design.md):
 
 ---
 
+## Phase 6.5 — Validate Specs with OpenSpec CLI (CRITICAL)
+
+**Goal**: Verify spec format matches OpenSpec requirements before considering the change complete.
+
+After writing all artifacts, run validation:
+
+```bash
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+
+# Validate the change
+$OPENSPEC validate "<change-id>"
+```
+
+**Common Validation Errors and Fixes**
+
+The instruction from `openspec instructions specs` should guide you, but common issues:
+
+#### Error: "No delta sections found"
+
+**Problem**: Specs must use delta headers (`## ADDED/MODIFIED/REMOVED/RENAMED Requirements`).
+
+**Fix**: Wrap requirements under appropriate delta header (the template will have this already).
+
+#### Error: "must include at least one scenario"
+
+**Problem**: Each requirement must have at least one `#### Scenario:` block.
+
+**Fix**: Ensure scenario headers are at 4 hash level (`####`) not 3 (`###`).
+
+### Validation Workflow
+
+```bash
+# 1) Initial validation
+$OPENSPEC validate "<change-id>"
+
+# 2) If errors, fix them and re-validate
+# 3) Repeat until validation passes
+# 4) Final status check
+$OPENSPEC status --change "<change-id>"
+```
+
+**Pass condition**: `Change '<change-id>' is valid`
+
+---
+
 ## Phase 7 — Pre-Implementation Gate
 
 Before implementation starts, verify the change is apply-ready:
 
 ```bash
-openspec status --change "<id>"
+$OPENSPEC status --change "<change-id>"
 ```
 
 Checklist:
@@ -273,32 +445,46 @@ Never publish changelog bullets that cannot be executed by users/operators.
 - Do not collapse independent backlog goals into one oversized change.
 - Do not skip negative scenarios for failure behavior.
 - Do not produce user-facing claims without e2e tests.
+- **ALWAYS use `openspec instructions` to get dynamic templates** - never hardcode templates in this skill.
 
 ---
 
 ## Quick Reference Commands
 
 ```bash
+# Path to openspec in this environment
+OPENSPEC="/home/devuser/.bun/bin/openspec"
+
 # 1) inspect backlog
 rg "BL-" docs/backlog.md
 
 # 2) create change
-openspec new change "<change-id>"
+$OPENSPEC new change "<change-id>"
 
 # 3) create feature branch (IMPORTANT: do this before coding!)
 git checkout -b "feat/<change-id>"
 git push origin "feat/<change-id>" -u
 
-# 4) inspect artifact state
-openspec status --change "<change-id>" --json
+# 4) Get dynamic instructions for each artifact and write them
 
-# 5) inspect artifact instructions
-openspec instructions proposal --change "<change-id>" --json
-openspec instructions design --change "<change-id>" --json
-openspec instructions tasks --change "<change-id>" --json
+# For proposal:
+$OPENSPEC instructions proposal --change "<change-id>" --json
 
-# 6) final readiness check
-openspec status --change "<change-id>"
+# For design:
+$OPENSPEC instructions design --change "<change-id>" --json
+
+# For specs:
+$OPENSPEC instructions specs --change "<change-id>" --json
+
+# For tasks:
+$OPENSPEC instructions tasks --change "<change-id>" --json
+
+# 5) VALIDATE SPECS (CRITICAL - must pass before continuing!)
+$OPENSPEC validate "<change-id>"
+# If errors, fix them and re-validate until passes
+
+# 6) final readiness check (should show all 4 artifacts complete)
+$OPENSPEC status --change "<change-id>"
 ```
 
 ---
@@ -312,4 +498,5 @@ This skill is complete for a backlog item only when:
 3. Verification matrix includes required unit/integration/e2e
 4. Changelog wording class is defined (`internal-only` / `user-facing`)
 5. Feature branch is created and pushed (`feat/<change-id>`)
-6. Change is ready for `/opsx-apply` implementation
+6. **Spec validation passes**: `openspec validate "<change-id>"` returns "is valid"
+7. Change is ready for `/opsx-apply` implementation

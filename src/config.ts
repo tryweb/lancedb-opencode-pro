@@ -134,6 +134,7 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       50,
       Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_MAX_ENTRIES_PER_SCOPE ?? raw.maxEntriesPerScope, 3000)),
     ),
+    retention: resolveRetentionConfig(raw, process.env),
   };
 
   validateEmbeddingConfig(resolvedConfig.embedding);
@@ -191,6 +192,28 @@ function resolveDedupConfig(
     }
   }
   return { enabled, writeThreshold, consolidateThreshold, candidateLimit };
+}
+
+function resolveRetentionConfig(
+  raw: Record<string, unknown>,
+  env: NodeJS.ProcessEnv
+): { effectivenessEventsDays: number } | undefined {
+  const rawRetention = raw.retention as Record<string, unknown> | undefined;
+  const envValue = env.LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS;
+  const rawValue = rawRetention?.effectivenessEventsDays;
+
+  if (envValue === undefined && rawValue === undefined) {
+    return undefined;
+  }
+
+  const days = Math.floor(toNumber(envValue ?? rawValue, 90));
+
+  if (days < 0) {
+    console.warn(`[config] retention.effectivenessEventsDays cannot be negative (${days}), using 90`);
+    return { effectivenessEventsDays: 90 };
+  }
+
+  return { effectivenessEventsDays: days };
 }
 
 function resolveInjectionConfig(
