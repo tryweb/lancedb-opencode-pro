@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ## [Unreleased]
 
+### Added
+
+- **Event TTL / Archival** (user-facing):
+  - Added configurable retention period for `effectiveness_events` table (default: 90 days)
+  - New config option `retention.effectivenessEventsDays` via `LANCEDB_OPENCODE_PRO_RETENTION_EVENTS_DAYS`
+  - Automatic cleanup of expired events on plugin initialization
+  - New `memory_event_cleanup` tool for manual cleanup with dry-run and archival export
+  - `memory_stats` now includes `eventTtl` status with expired count and scope breakdown
+  - Evidence:
+    - Spec: openspec/changes/bl-037-event-ttl-archival/
+    - Code: src/types.ts, src/config.ts, src/store.ts, src/tools/memory.ts
+    - Surface: opencode-tool + internal-api
+
 ### Changed
 
 - **Index Creation Resilience** (internal-only):

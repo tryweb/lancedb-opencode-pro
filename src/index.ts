@@ -299,6 +299,10 @@ async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<Runtime
   const embedder = createEmbedder(resolved.embedding);
   const store = new MemoryStore(resolved.dbPath);
 
+  if (resolved.retention) {
+    store.setRetentionConfig(resolved.retention);
+  }
+
   const state: RuntimeState = {
     config: resolved,
     embedder,

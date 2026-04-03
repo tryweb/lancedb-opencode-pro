@@ -188,6 +188,10 @@ export function createMemoryTools(state: ToolRuntimeState) {
         const embedderHealth = getEmbedderHealth();
         const searchMode = embedderHealth.fallbackActive ? "bm25-only" : state.config.retrieval.mode;
 
+        const eventTtl = state.config.retention
+          ? await state.store.getEventTtlStatus()
+          : { enabled: false, retentionDays: 90, expiredCount: 0, scopeBreakdown: {} };
+
         return JSON.stringify(
           {
             provider: state.config.provider,
@@ -199,6 +203,85 @@ export function createMemoryTools(state: ToolRuntimeState) {
             embeddingModel: state.config.embedding.model,
             searchMode,
             embedderHealth,
+            eventTtl,
+          },
+          null,
+          2,
+        );
+      },
+    }),
+    memory_event_cleanup: tool({
+      description: "Clean up expired effectiveness events with optional archival export",
+      args: {
+        scope: tool.schema.string().optional(),
+        dryRun: tool.schema.boolean().optional().default(false),
+        archivePath: tool.schema.string().optional(),
+      },
+      execute: async (args: { scope?: string; dryRun?: boolean; archivePath?: string }, context: ToolContext) => {
+        await state.ensureInitialized();
+        if (!state.initialized) return unavailableMessage(state.config.embedding.provider);
+
+        if (!state.config.retention || state.config.retention.effectivenessEventsDays <= 0) {
+          return JSON.stringify(
+            { error: "Event TTL is disabled. Configure retention.effectivenessEventsDays in config." },
+            null,
+            2,
+          );
+        }
+
+        const status = await state.store.getEventTtlStatus();
+
+        if (args.dryRun) {
+          return JSON.stringify(
+            {
+              wouldDelete: status.expiredCount,
+              scopeBreakdown: status.scopeBreakdown,
+              retentionDays: status.retentionDays,
+              message: "Dry run - no events deleted",
+            },
+            null,
+            2,
+          );
+        }
+
+        let archivedCount = 0;
+        if (args.archivePath && status.expiredCount > 0) {
+          try {
+            const eventsToArchive = await state.store.getEventTtlStatus();
+            const fs = await import("node:fs");
+            await fs.promises.writeFile(
+              args.archivePath,
+              JSON.stringify(
+                {
+                  exportedAt: new Date().toISOString(),
+                  retentionDays: status.retentionDays,
+                  count: status.expiredCount,
+                  scopeBreakdown: status.scopeBreakdown,
+                  events: status,
+                },
+                null,
+                2,
+              ),
+            );
+            archivedCount = status.expiredCount;
+          } catch (error) {
+            return JSON.stringify(
+              { error: `Archive failed: ${error instanceof Error ? error.message : String(error)}` },
+              null,
+              2,
+            );
+          }
+        }
+
+        const deletedCount = await state.store.cleanupExpiredEvents(args.scope, status.retentionDays);
+        const remainingStatus = await state.store.getEventTtlStatus();
+
+        return JSON.stringify(
+          {
+            deletedCount,
+            archivedCount,
+            remainingCount: remainingStatus.expiredCount,
+            retentionDays: status.retentionDays,
           },
           null,
           2,

@@ -160,6 +160,77 @@ export class MemoryStore {
     await this.ensureEventTableCompatibility();
 
     await this.ensureIndexes();
+
+    const retentionDays = this.retentionConfig?.effectivenessEventsDays;
+    if (retentionDays !== undefined && retentionDays > 0) {
+      await this.cleanupExpiredEvents(undefined, retentionDays);
+    }
+  }
+
+  private retentionConfig: { effectivenessEventsDays: number } | undefined;
+
+  setRetentionConfig(config: { effectivenessEventsDays: number } | undefined): void {
+    this.retentionConfig = config;
+  }
+
+  async cleanupExpiredEvents(scope?: string, retentionDaysOverride?: number): Promise<number> {
+    const table = this.requireEventTable();
+    const retentionDays = retentionDaysOverride ?? this.retentionConfig?.effectivenessEventsDays ?? 90;
+
+    if (retentionDays <= 0) {
+      return 0;
+    }
+
+    const cutoffTimestamp = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+
+    let filter = `timestamp < ${cutoffTimestamp}`;
+    if (scope) {
+      filter = `(${filter}) AND (scope = '${scope}' OR scope LIKE 'project:%')`;
+    }
+
+    const toDelete = await table.query().where(filter).limit(1000).toArray();
+
+    if (toDelete.length === 0) {
+      return 0;
+    }
+
+    const idsToDelete = toDelete.map((row: Record<string, unknown>) => row.id as string);
+    let deletedCount = 0;
+
+    for (const id of idsToDelete) {
+      try {
+        await table.delete(`id = '${id}'`);
+        deletedCount++;
+      } catch (error) {
+        console.warn(`[store] Failed to delete event ${id}: ${error}`);
+      }
+    }
+
+    console.log(`[store] Event TTL cleanup completed, deleted=${deletedCount}, retentionDays=${retentionDays}`);
+    return deletedCount;
+  }
+
+  async getEventTtlStatus(): Promise<{ enabled: boolean; retentionDays: number; expiredCount: number; scopeBreakdown: Record<string, number> }> {
+    const retentionDays = this.retentionConfig?.effectivenessEventsDays ?? 90;
+    const enabled = retentionDays > 0;
+
+    if (!enabled) {
+      return { enabled: false, retentionDays: 0, expiredCount: 0, scopeBreakdown: {} };
+    }
+
+    const cutoffTimestamp = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const table = this.requireEventTable();
+
+    const allExpired = await table.query().where(`timestamp < ${cutoffTimestamp}`).toArray();
+    const expiredCount = allExpired.length;
+
+    const scopeBreakdown: Record<string, number> = {};
+    for (const row of allExpired as Record<string, unknown>[]) {
+      const scope = (row.scope as string) || "unknown";
+      scopeBreakdown[scope] = (scopeBreakdown[scope] || 0) + 1;
+    }
+
+    return { enabled, retentionDays, expiredCount, scopeBreakdown };
   }
 
   async put(record: MemoryRecord): Promise<void> {
