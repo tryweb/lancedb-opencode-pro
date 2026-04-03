@@ -1,18 +1,29 @@
 export type EmbeddingProvider = "ollama" | "openai";
 
-export type RetrievalMode = "hybrid" | "vector";
+export type EmbedderStatus = "healthy" | "degraded" | "unavailable";
 
-export type InjectionMode = "fixed" | "budget" | "adaptive";
+export interface EmbedderRetryConfig {
+  enabled: boolean;
+  maxAttempts: number;
+  initialDelayMs: number;
+  backoffMultiplier: number;
+}
 
-export type SummarizationMode = "none" | "truncate" | "extract" | "auto";
+export interface EmbedderHealth {
+  status: EmbedderStatus;
+  lastError: string | null;
+  lastSuccess: number | null;
+  retryCount: number;
+  fallbackActive: boolean;
+}
 
-export type CodeTruncationMode = "smart" | "signature" | "preserve";
-
-export type ContentType = "text" | "code" | "mixed";
-
-export interface ContentDetection {
-  hasCode: boolean;
-  isPureCode: boolean;
+export interface EmbeddingConfig {
+  provider: EmbeddingProvider;
+  model: string;
+  baseUrl?: string;
+  apiKey?: string;
+  timeoutMs?: number;
+  retry?: EmbedderRetryConfig;
 }
 
 export interface SummarizedContent {

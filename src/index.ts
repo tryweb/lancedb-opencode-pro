@@ -131,11 +131,21 @@ const plugin: Plugin = async (input) => {
       const categoryWeights = getCategoryWeights(taskType, state.config.injection.taskTypeProfiles);
 
       let queryVector: number[] = [];
+      let embedderFailed = false;
       try {
         queryVector = await state.embedder.embed(query);
       } catch (error) {
+        embedderFailed = true;
         console.warn(`[lancedb-opencode-pro] embedding unavailable during recall: ${toErrorMessage(error)}`);
         queryVector = [];
+      }
+
+      const isFallback = embedderFailed || queryVector.length === 0;
+      const effectiveVectorWeight = isFallback ? 0 : (state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight);
+      const effectiveBm25Weight = isFallback ? 1 : (state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight);
+
+      if (isFallback) {
+        console.info(`[lancedb-opencode-pro] Using BM25-only search (embedder unavailable)`);
       }
 
       const results = await state.store.search({
@@ -143,8 +153,8 @@ const plugin: Plugin = async (input) => {
         queryVector,
         scopes,
         limit: profile.maxMemories * 2,
-        vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
-        bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
+        vectorWeight: effectiveVectorWeight,
+        bm25Weight: effectiveBm25Weight,
         minScore: Math.max(state.config.retrieval.minScore, state.config.injection.injectionFloor),
         rrfK: state.config.retrieval.rrfK,
         recencyBoost: state.config.retrieval.recencyBoost,

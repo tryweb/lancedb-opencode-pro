@@ -1,7 +1,7 @@
 import { tool } from "@opencode-ai/plugin";
 import { deriveProjectScope, buildScopeFilter } from "../scope.js";
 import { generateId } from "../utils.js";
-import type { Embedder } from "../embedder.js";
+import { getEmbedderHealth, type Embedder } from "../embedder.js";
 import type { MemoryStore } from "../store.js";
 import type { MemoryRuntimeConfig, MemoryCategory, CitationStatus, ValidationOutcome } from "../types.js";
 
@@ -55,10 +55,20 @@ export function createMemoryTools(state: ToolRuntimeState) {
         const scopes = buildScopeFilter(activeScope, state.config.includeGlobalScope);
 
         let queryVector: number[] = [];
+        let embedderFailed = false;
         try {
           queryVector = await state.embedder.embed(args.query);
-        } catch {
+        } catch (error) {
+          embedderFailed = true;
           queryVector = [];
+        }
+
+        const isFallback = embedderFailed || queryVector.length === 0;
+        const effectiveVectorWeight = isFallback ? 0 : (state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight);
+        const effectiveBm25Weight = isFallback ? 1 : (state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight);
+
+        if (isFallback) {
+          console.info(`[lancedb-opencode-pro] Using BM25-only search (embedder unavailable)`);
         }
 
         const results = await state.store.search({
@@ -66,8 +76,8 @@ export function createMemoryTools(state: ToolRuntimeState) {
           queryVector,
           scopes,
           limit: args.limit ?? 5,
-          vectorWeight: state.config.retrieval.mode === "vector" ? 1 : state.config.retrieval.vectorWeight,
-          bm25Weight: state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight,
+          vectorWeight: effectiveVectorWeight,
+          bm25Weight: effectiveBm25Weight,
           minScore: state.config.retrieval.minScore,
           rrfK: state.config.retrieval.rrfK,
           recencyBoost: state.config.retrieval.recencyBoost,
@@ -174,6 +184,10 @@ export function createMemoryTools(state: ToolRuntimeState) {
           await state.embedder.dim(),
         );
         const health = state.store.getIndexHealth();
+
+        const embedderHealth = getEmbedderHealth();
+        const searchMode = embedderHealth.fallbackActive ? "bm25-only" : state.config.retrieval.mode;
+
         return JSON.stringify(
           {
             provider: state.config.provider,
@@ -183,6 +197,8 @@ export function createMemoryTools(state: ToolRuntimeState) {
             incompatibleVectors,
             index: health,
             embeddingModel: state.config.embedding.model,
+            searchMode,
+            embedderHealth,
           },
           null,
           2,

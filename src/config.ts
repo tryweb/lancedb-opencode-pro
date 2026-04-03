@@ -70,6 +70,12 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       : process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS;
   const timeoutRaw = timeoutEnv ?? embeddingRaw.timeoutMs;
 
+  const retryRaw = (embeddingRaw.retry ?? {}) as Record<string, unknown>;
+  const retryEnabled = toBoolean(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_RETRY_ENABLED ?? retryRaw.enabled, true);
+  const retryMaxAttempts = Math.max(1, Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_RETRY_MAX_ATTEMPTS ?? retryRaw.maxAttempts, 3)));
+  const retryInitialDelayMs = Math.max(100, Math.floor(toNumber(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_RETRY_INITIAL_DELAY_MS ?? retryRaw.initialDelayMs, 1000)));
+  const retryBackoffMultiplier = Math.max(1, toNumber(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_RETRY_BACKOFF_MULTIPLIER ?? retryRaw.backoffMultiplier, 2));
+
   const injection = resolveInjectionConfig(raw, process.env);
 
   const dedup = resolveDedupConfig(raw, process.env);
@@ -86,6 +92,12 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
         500,
         Math.floor(toNumber(timeoutRaw, 6000)),
       ),
+      retry: {
+        enabled: retryEnabled,
+        maxAttempts: retryMaxAttempts,
+        initialDelayMs: retryInitialDelayMs,
+        backoffMultiplier: retryBackoffMultiplier,
+      },
     },
     retrieval: {
       mode,

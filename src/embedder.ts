@@ -1,9 +1,139 @@
-import type { EmbeddingConfig } from "./types.js";
+import type { EmbedderHealth, EmbedderRetryConfig, EmbeddingConfig } from "./types.js";
 
 export interface Embedder {
   readonly model: string;
   embed(text: string): Promise<number[]>;
   dim(): Promise<number>;
+}
+
+let globalEmbedderHealth: EmbedderHealth = {
+  status: "healthy",
+  lastError: null,
+  lastSuccess: null,
+  retryCount: 0,
+  fallbackActive: false,
+};
+
+export function getEmbedderHealth(): EmbedderHealth {
+  return globalEmbedderHealth;
+}
+
+export function setEmbedderHealth(health: Partial<EmbedderHealth>): void {
+  globalEmbedderHealth = { ...globalEmbedderHealth, ...health };
+}
+
+export function resetEmbedderHealth(): void {
+  globalEmbedderHealth = {
+    status: "healthy",
+    lastError: null,
+    lastSuccess: null,
+    retryCount: 0,
+    fallbackActive: false,
+  };
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function embedWithRetry(
+  embedder: Embedder,
+  config: EmbeddingConfig,
+  text: string,
+): Promise<number[]> {
+  const retry = config.retry ?? {
+    enabled: true,
+    maxAttempts: 3,
+    initialDelayMs: 1000,
+    backoffMultiplier: 2,
+  };
+
+  if (!retry.enabled) {
+    return embedder.embed(text);
+  }
+
+  let lastError: Error | null = null;
+  let attempt = 0;
+
+  while (attempt < retry.maxAttempts) {
+    attempt++;
+    try {
+      const result = await embedder.embed(text);
+      globalEmbedderHealth.lastSuccess = Date.now();
+      globalEmbedderHealth.lastError = null;
+      if (globalEmbedderHealth.status === "degraded") {
+        globalEmbedderHealth.status = "healthy";
+        console.info(`[lancedb-opencode-pro] Embedder recovered, resuming normal mode`);
+      }
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      globalEmbedderHealth.retryCount++;
+      globalEmbedderHealth.lastError = lastError.message;
+
+      if (attempt >= retry.maxAttempts) {
+        break;
+      }
+
+      const delay = Math.floor(
+        retry.initialDelayMs * Math.pow(retry.backoffMultiplier, attempt - 1),
+      );
+      console.warn(
+        `[lancedb-opencode-pro] Embedder failed (attempt ${attempt}/${retry.maxAttempts}), retrying in ${delay}ms: ${lastError.message}`,
+      );
+      await sleep(delay);
+    }
+  }
+
+  globalEmbedderHealth.status = "degraded";
+  globalEmbedderHealth.fallbackActive = true;
+  console.warn(
+    `[lancedb-opencode-pro] Embedder unavailable after ${retry.maxAttempts} attempts, falling back to BM25-only search`,
+  );
+  throw lastError;
+}
+
+async function dimWithRetry(embedder: Embedder, config: EmbeddingConfig): Promise<number> {
+  const retry = config.retry ?? {
+    enabled: true,
+    maxAttempts: 3,
+    initialDelayMs: 1000,
+    backoffMultiplier: 2,
+  };
+
+  if (!retry.enabled) {
+    return embedder.dim();
+  }
+
+  let lastError: Error | null = null;
+  let attempt = 0;
+
+  while (attempt < retry.maxAttempts) {
+    attempt++;
+    try {
+      const result = await embedder.dim();
+      globalEmbedderHealth.lastSuccess = Date.now();
+      globalEmbedderHealth.lastError = null;
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      globalEmbedderHealth.retryCount++;
+      globalEmbedderHealth.lastError = lastError.message;
+
+      if (attempt >= retry.maxAttempts) {
+        break;
+      }
+
+      const delay = Math.floor(
+        retry.initialDelayMs * Math.pow(retry.backoffMultiplier, attempt - 1),
+      );
+      await sleep(delay);
+    }
+  }
+
+  globalEmbedderHealth.status = "degraded";
+  globalEmbedderHealth.fallbackActive = true;
+  throw lastError;
 }
 
 interface OllamaEmbeddingResponse {
@@ -179,8 +309,19 @@ export class OpenAIEmbedder implements Embedder {
 }
 
 export function createEmbedder(config: EmbeddingConfig): Embedder {
-  if (config.provider === "openai") {
-    return new OpenAIEmbedder(config);
-  }
-  return new OllamaEmbedder(config);
+  const inner = config.provider === "openai"
+    ? new OpenAIEmbedder(config)
+    : new OllamaEmbedder(config);
+
+  return {
+    get model() {
+      return inner.model;
+    },
+    async embed(text: string): Promise<number[]> {
+      return embedWithRetry(inner, config, text);
+    },
+    async dim(): Promise<number> {
+      return dimWithRetry(inner, config);
+    },
+  };
 }
