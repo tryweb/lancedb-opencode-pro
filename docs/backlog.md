@@ -98,6 +98,9 @@
 |---|---|---|---|---|---|---|
 | BL-036 | LanceDB ANN fast-path for large scopes | P2 | planned | TBD | TBD | 新增 `LANCEDB_OPENCODE_PRO_VECTOR_INDEX_THRESHOLD` (預設 1000)；當 scope entries ≥ 閾值時自動建立 IVF_PQ 向量索引；`memory_stats` 揭露 `searchMode` 欄位；`pruneScope` 超過 `maxEntriesPerScope` 時發出警告日誌 [Surface: Plugin] |
 | BL-037 | Event table TTL / archival | P1 | planned | TBD | TBD | 為 `effectiveness_events` 建立保留期與歸檔機制，降低長期 local store 成本 [Surface: Plugin] |
+| BL-048 | LanceDB 索引衝突修復與備份安全機制 | P1 | proposed | TBD | TBD | 修復 ensureIndexes() 重試邏輯 + 可選定期備份 config [Surface: Plugin + Docs] |
+| BL-049 | Embedder 錯誤容忍與 graceful degradation | P1 | proposed | TBD | TBD | embedder 失敗時的重試/延遲 + 搜尋時 BM25 fallback [Surface: Plugin] |
+| BL-050 | 內建 embedding 模型（transformers.js） | P1 | proposed | TBD | TBD | 新增 TransformersEmbedder，提供離線 embedding 能力 [Surface: Plugin] |
 
 ## Epic 10 — 架構可維護性與效能硬化
 
@@ -127,7 +130,7 @@ BL-003, BL-014, BL-015, BL-016, BL-017, BL-018, BL-019, BL-020
 待處理：BL-021（Plugin；視 upstream 事件）, BL-032（Test-infra）, BL-033（Test-infra + docs）, BL-040（Plugin）
 
 ### Release D（儲存引擎與規模韌性）— 📝 PLANNED
-BL-036, BL-037
+BL-036, BL-037, BL-048, BL-049, BL-050
 
 ### Release E（架構可維護性與效能硬化）— 📝 PLANNED
 BL-041, BL-043, BL-044, BL-045, BL-046, BL-047
