@@ -101,6 +101,22 @@ Gate passes when:
 
 If the gate fails, **stop and fix root causes** before proceeding. Never bump the version on a failing codebase.
 
+### Optional: Staging Verification
+
+For additional operability assurance, use the staging verification script:
+
+```bash
+./scripts/verify-staging.sh
+```
+
+This script:
+1. Builds and packs the plugin
+2. Spins up a clean Docker container
+3. Installs the `.tgz` via `npm install -g`
+4. Verifies the plugin can be `require()`'d
+
+This provides **evidence that the published package is actually usable**, not just buildable.
+
 ---
 
 ## Phase 2 — Claim-to-Evidence Gate (CRITICAL)
@@ -450,6 +466,9 @@ EOF
 # Phase 1 — local gate
 docker compose build --no-cache && docker compose up -d
 docker compose exec opencode-dev npm run release:check
+
+# Optional staging verification (Phase 3 operability)
+./scripts/verify-staging.sh
 
 # Phase 2-3 — evidence and operability checks
 rg "^[[:space:]]*[a-z0-9_]+:\s*tool\(" src/index.ts
