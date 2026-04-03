@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
-## [Unreleased]
+## [0.6.1] - 2026-04-03
 
 ### Added
 
@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
   - Evidence:
     - Spec: openspec/changes/bl-037-event-ttl-archival/
     - Code: src/types.ts, src/config.ts, src/store.ts, src/tools/memory.ts
+    - Tests: test/config.test.ts (6 new tests)
     - Surface: opencode-tool + internal-api
 
 ### Changed
