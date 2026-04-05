@@ -11,5 +11,8 @@ npm-debug.log*
 !.opencode/skills/
 !.opencode/skills/**
 
+# Test databases (LanceDB test artifacts)
+test/.test-db-*/
+
 # Agent guidelines (local development instructions for AI agents)
 AGENT.md
