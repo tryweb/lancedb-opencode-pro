@@ -99,6 +99,7 @@
 | BL-036 | LanceDB ANN fast-path for large scopes | P2 | planned | TBD | TBD | 新增 `LANCEDB_OPENCODE_PRO_VECTOR_INDEX_THRESHOLD` (預設 1000)；當 scope entries ≥ 閾值時自動建立 IVF_PQ 向量索引；`memory_stats` 揭露 `searchMode` 欄位；`pruneScope` 超過 `maxEntriesPerScope` 時發出警告日誌 [Surface: Plugin] |
 | BL-037 | Event table TTL / archival | P1 | done | bl-037-event-ttl-archival | openspec/changes/archive/2026-04-03-bl-037-event-ttl-archival/specs/event-ttl/ | 為 `effectiveness_events` 建立保留期與歸檔機制，降低長期 local store 成本 [Surface: Plugin] |
 | BL-048 | LanceDB 索引衝突修復與備份安全機制 | P1 | **done** | bl-048-lancedb-index-recovery | openspec/changes/bl-048-lancedb-index-recovery/ | 修復 ensureIndexes() 重試邏輯 + 可選定期備份 config [Surface: Plugin] v0.6.1 |
+| BL-051 | FTS/Vector index concurrent-process race condition fix | P0 | **done** | fix-fts-index-race-condition | openspec/changes/archive/2026-04-05-fix-fts-index-race-condition/ | 修復多进程同时启动时的 index 创建冲突；commit-conflict 检测 + re-verify + jitter + final-pass [Surface: Plugin] v0.6.1 |
 | BL-049 | Embedder 錯誤容忍與 graceful degradation | P1 | **done** | bl-049-embedder-error-tolerance | openspec/changes/archive/2026-04-03-bl-049-embedder-error-tolerance/ | embedder 失敗時的重試/延遲 + 搜尋時 BM25 fallback [Surface: Plugin] |
 | BL-050 | 內建 embedding 模型（transformers.js） | P1 | proposed | TBD | TBD | 新增 TransformersEmbedder，提供離線 embedding 能力 [Surface: Plugin] |
 

@@ -2043,7 +2043,20 @@ export class MemoryStore {
   }
 
   /**
-   * Create vector index with exponential backoff retry and existence check
+   * Returns true if the error message indicates a LanceDB retryable commit conflict,
+   * meaning another concurrent process may have already created the same index.
+   */
+  private isCommitConflict(errorMsg: string): boolean {
+    return (
+      errorMsg.includes("Retryable commit conflict") ||
+      errorMsg.includes("preempted by concurrent transaction")
+    );
+  }
+
+  /**
+   * Create vector index with exponential backoff retry and existence check.
+   * Handles concurrent-process commit conflicts by re-verifying index existence
+   * after each conflict error, and adds jitter to avoid thundering-herd re-collision.
    */
   private async createVectorIndexWithRetry(table: LanceTable): Promise<void> {
     const maxRetries = 3;
@@ -2056,6 +2069,8 @@ export class MemoryStore {
       return;
     }
 
+    let lastErrorMsg = "";
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       this.indexState.vectorRetries = attempt + 1;
       try {
@@ -2064,21 +2079,44 @@ export class MemoryStore {
         this.indexState.vector = true;
         return;
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        lastErrorMsg = error instanceof Error ? error.message : String(error);
+
+        // Commit conflict: another process may have just created the index — re-verify.
+        if (this.isCommitConflict(lastErrorMsg)) {
+          const updatedIndices = await table.listIndices();
+          if (updatedIndices.some(idx => idx.name === "vector")) {
+            console.log(`[store] Vector index created by concurrent process, adopting it (attempt ${attempt + 1})`);
+            this.indexState.vector = true;
+            return;
+          }
+        }
+
         if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          console.warn(`[store] Vector index creation failed (attempt ${attempt + 1}/${maxRetries}): ${errorMsg}. Retrying in ${delay}ms...`);
+          // Jitter prevents thundering-herd re-collision among concurrent processes.
+          const delay = baseDelay * Math.pow(2, attempt) + Math.random() * baseDelay;
+          console.warn(`[store] Vector index creation failed (attempt ${attempt + 1}/${maxRetries}): ${lastErrorMsg}. Retrying in ${Math.round(delay)}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          console.error(`[store] Vector index creation failed after ${maxRetries} attempts: ${errorMsg}. Falling back to in-memory search.`);
-          this.indexState.vector = false;
         }
       }
     }
+
+    // Final-pass existence check: the last retry's conflict may have caused another
+    // process to succeed even though our own call threw.
+    const finalIndices = await table.listIndices();
+    if (finalIndices.some(idx => idx.name === "vector")) {
+      console.log("[store] Vector index found on final check (created by concurrent process), adopting it");
+      this.indexState.vector = true;
+      return;
+    }
+
+    console.error(`[store] Vector index creation failed after ${maxRetries} attempts: ${lastErrorMsg}. Falling back to in-memory search.`);
+    this.indexState.vector = false;
   }
 
   /**
-   * Create FTS index with exponential backoff retry and existence check
+   * Create FTS index with exponential backoff retry and existence check.
+   * Handles concurrent-process commit conflicts by re-verifying index existence
+   * after each conflict error, and adds jitter to avoid thundering-herd re-collision.
    */
   private async createFtsIndexWithRetry(table: LanceTable): Promise<void> {
     const maxRetries = 3;
@@ -2090,6 +2128,8 @@ export class MemoryStore {
       this.indexState.fts = true;
       return;
     }
+
+    let lastErrorMsg = "";
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       this.indexState.ftsRetries = attempt + 1;
@@ -2106,18 +2146,41 @@ export class MemoryStore {
         this.indexState.ftsError = "";
         return;
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        lastErrorMsg = error instanceof Error ? error.message : String(error);
+
+        // Commit conflict: another process may have just created the index — re-verify.
+        if (this.isCommitConflict(lastErrorMsg)) {
+          const updatedIndices = await table.listIndices();
+          if (updatedIndices.some(idx => idx.name === "text")) {
+            console.log(`[store] FTS index created by concurrent process, adopting it (attempt ${attempt + 1})`);
+            this.indexState.fts = true;
+            this.indexState.ftsError = "";
+            return;
+          }
+        }
+
         if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          console.warn(`[store] FTS index creation failed (attempt ${attempt + 1}/${maxRetries}): ${errorMsg}. Retrying in ${delay}ms...`);
+          // Jitter prevents thundering-herd re-collision among concurrent processes.
+          const delay = baseDelay * Math.pow(2, attempt) + Math.random() * baseDelay;
+          console.warn(`[store] FTS index creation failed (attempt ${attempt + 1}/${maxRetries}): ${lastErrorMsg}. Retrying in ${Math.round(delay)}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          console.error(`[store] FTS index creation failed after ${maxRetries} attempts: ${errorMsg}. Falling back to vector-only search.`);
-          this.indexState.fts = false;
-          this.indexState.ftsError = errorMsg;
         }
       }
     }
+
+    // Final-pass existence check: the last retry's conflict may have caused another
+    // process to succeed even though our own call threw.
+    const finalIndices = await table.listIndices();
+    if (finalIndices.some(idx => idx.name === "text")) {
+      console.log("[store] FTS index found on final check (created by concurrent process), adopting it");
+      this.indexState.fts = true;
+      this.indexState.ftsError = "";
+      return;
+    }
+
+    console.error(`[store] FTS index creation failed after ${maxRetries} attempts: ${lastErrorMsg}. Falling back to vector-only search.`);
+    this.indexState.fts = false;
+    this.indexState.ftsError = lastErrorMsg;
   }
 
   private async ensureMemoriesTableCompatibility(): Promise<void> {
