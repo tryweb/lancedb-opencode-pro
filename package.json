@@ -56,7 +56,7 @@
     "prepublishOnly": "npm run verify:full"
   },
   "dependencies": {
-    "@lancedb/lancedb": "^0.27.1",
+    "@lancedb/lancedb": "^0.27.2",
     "@opencode-ai/plugin": "1.2.25",
     "@opencode-ai/sdk": "1.2.25"
   },

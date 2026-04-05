@@ -28,6 +28,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
   - Synced delta specs to main spec `openspec/specs/index-retry/spec.md`
   - Added 3 new requirements with 7 scenarios covering commit-conflict handling, jitter backoff, final-pass check
 
+### Dependencies
+
+- Upgraded `@lancedb/lancedb` from `0.27.1` to `0.27.2`
+
 ### Documentation
 
 - Updated `docs/backlog.md` with BL-051 (FTS/Vector index concurrent-process race condition fix)
