@@ -166,14 +166,13 @@ docker compose exec opencode-dev npm run verify:full
 
 ## 🗺️ 版本歷史
 
+- **v0.6.2**: 修復索引競爭條件（並發衝突處理、jitter 重試）
+- **v0.6.1**: 事件 TTL/歸檔、索引建立彈性、去重複效能優化
 - **v0.6.0**: 新增學習儀表板、KPI 管線、反饋驅動排序、任務類型感知注入
 - **v0.5.0**: 新增記憶解釋工具 (`memory_why`, `memory_explain_recall`)
 - **v0.4.0**: 新增引用模型追蹤與驗證 (`memory_citation`, `memory_validate_citation`)
-- **v0.3.0**: 引入事件式學習 Hooks
-- **v0.2.9**: 引入事件式學習工具 (`task_episode_create`, `similar_task_recall` 等)
-- **v0.2.5**: 新增去重複機制 (`memory_consolidate`)
-- **v0.2.4**: 強化記憶注入控制 (支援 budget, adaptive 模式)
-- **v0.2.0**: 支援跨專案記憶共享 (global scope)
+
+_[舊版歷史請參閱 CHANGELOG.md]_
 
 完整變更日誌請參閱：[CHANGELOG.md](CHANGELOG.md)
 
@@ -192,5 +191,5 @@ docker compose exec opencode-dev npm run verify:full
 - **報告問題**: 軟體錯誤回報或功能請求，請至 [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues) 提交。
 - **授權協議**: MIT License - 詳見 [LICENSE](LICENSE)。
 
-**最後更新**: 2026-03-31  
-**最新版本**: v0.6.0
+**最後更新**: 2026-04-05
+**最新版本**: v0.6.2

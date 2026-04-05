@@ -6,6 +6,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.6.2] - 2026-04-05
+
+### Added
+
+- **Index Race Condition Fix** (user-facing):
+  - Fixed TOCTOU race condition when multiple OpenCode processes start simultaneously
+  - Added `isCommitConflict()` helper to detect LanceDB retryable commit conflict errors
+  - After commit conflict, re-verify index existence before counting failure (adopt index if created by concurrent process)
+  - Added randomized jitter to retry backoff to prevent thundering-herd re-collision
+  - Added final-pass existence check after all retries exhausted
+  - Evidence:
+    - Spec: openspec/changes/archive/2026-04-05-fix-fts-index-race-condition/specs/index-retry/spec.md
+    - Code: src/store.ts (isCommitConflict, createVectorIndexWithRetry, createFtsIndexWithRetry)
+    - Tests: test/unit/index-race-condition.test.ts (6 new tests)
+    - Surface: internal-api
+
+### Changed
+
+- **Index Retry Spec Updated**:
+  - Synced delta specs to main spec `openspec/specs/index-retry/spec.md`
+  - Added 3 new requirements with 7 scenarios covering commit-conflict handling, jitter backoff, final-pass check
+
+### Documentation
+
+- Updated `docs/backlog.md` with BL-051 (FTS/Vector index concurrent-process race condition fix)
+- Updated `docs/roadmap.md` with BL-051 in P1 list
+
+---
+
 ## [0.6.1] - 2026-04-03
 
 ### Added

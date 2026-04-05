@@ -173,14 +173,13 @@ Alternatively, install via `.tgz` release asset or build from source. See [Insta
 
 ## 🗺️ Version History
 
+- **v0.6.2**: Index Race Condition Fix (concurrent-process conflict handling, jitter backoff)
+- **v0.6.1**: Event TTL/Archival, Index Creation Resilience, Duplicate Consolidation Performance
 - **v0.6.0**: Learning Dashboard, KPI Pipeline, Feedback-Driven Ranking, Task-Type Aware Injection
 - **v0.5.0**: Memory Explanation Tools (`memory_why`, `memory_explain_recall`)
 - **v0.4.0**: Citation Model (`memory_citation`, `memory_validate_citation`)
-- **v0.3.0**: Episodic Learning Hooks
-- **v0.2.9**: Episodic Learning Tools
-- **v0.2.5**: Deduplication (`memory_consolidate`)
-- **v0.2.4**: Memory Injection Controls (budget, adaptive)
-- **v0.2.0**: Cross-project Memory Sharing (global scope)
+
+_[older versions removed - see CHANGELOG.md for full history]_
 
 See [CHANGELOG.md](CHANGELOG.md) for all changes.
 
@@ -199,5 +198,5 @@ See [CHANGELOG.md](CHANGELOG.md) for all changes.
 - **Issues**: Submit errors or requests on [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues).
 - **License**: MIT License - see [LICENSE](LICENSE).
 
-**Last Updated**: 2026-03-31
-**Latest Version**: v0.6.0
+**Last Updated**: 2026-04-05
+**Latest Version**: v0.6.2
