@@ -8,6 +8,7 @@ interface MockTable {
   add(rows: unknown[]): Promise<void>;
   delete(filter: string): Promise<void>;
   schema(): Promise<{ fields: Array<{ name: string }> }>;
+  countRows(filter?: string): Promise<number>;
   query(): {
     where(expr: string): ReturnType<MockTable["query"]>;
     select(columns: string[]): ReturnType<MockTable["query"]>;
@@ -29,6 +30,7 @@ function makeMockTable(overrides: Partial<MockTable> = {}): MockTable {
     async add() {},
     async delete() {},
     async schema() { return { fields: [] }; },
+    async countRows() { return 1000; },
     query() { return q; },
   };
   return { ...base, ...overrides };
@@ -148,4 +150,86 @@ test("createFtsIndexWithRetry: final-pass check adopts index created by concurre
   const indexState = internal.indexState as { fts: boolean; ftsError: string };
   assert.strictEqual(indexState.fts, true, "FTS index should be adopted via final-pass check after all retries exhausted");
   assert.strictEqual(indexState.ftsError, "", "ftsError should be cleared when adopted via final-pass");
+});
+
+test("createVectorIndexWithRetry: empty table defers index creation silently", async () => {
+  const store = makeStore();
+
+  const table = makeMockTable({
+    async listIndices() { return []; },
+    async countRows() { return 0; },
+  });
+
+  const internal = asInternal(store);
+  await (internal.createVectorIndexWithRetry as (t: MockTable) => Promise<void>).call(store, table);
+
+  const indexState = internal.indexState as { vector: boolean };
+  assert.strictEqual(indexState.vector, false, "vector index should be deferred on empty table");
+});
+
+test("createVectorIndexWithRetry: insufficient rows defers index creation", async () => {
+  const store = makeStore();
+
+  const table = makeMockTable({
+    async listIndices() { return []; },
+    async countRows() { return 100; },
+  });
+
+  const internal = asInternal(store);
+  await (internal.createVectorIndexWithRetry as (t: MockTable) => Promise<void>).call(store, table);
+
+  const indexState = internal.indexState as { vector: boolean };
+  assert.strictEqual(indexState.vector, false, "vector index should be deferred when rows < 256");
+});
+
+test("createVectorIndexWithRetry: sufficient rows attempts index creation", async () => {
+  const store = makeStore();
+
+  let createIndexCalled = false;
+  const table = makeMockTable({
+    async listIndices() { return []; },
+    async countRows() { return 300; },
+    async createIndex() {
+      createIndexCalled = true;
+    },
+  });
+
+  const internal = asInternal(store);
+  await (internal.createVectorIndexWithRetry as (t: MockTable) => Promise<void>).call(store, table);
+
+  assert.ok(createIndexCalled, "createIndex should be called when rows >= 256");
+  const indexState = internal.indexState as { vector: boolean };
+  assert.strictEqual(indexState.vector, true, "vector index should be created successfully");
+});
+
+test("createFtsIndexWithRetry: empty table defers index creation with error message", async () => {
+  const store = makeStore();
+
+  const table = makeMockTable({
+    async listIndices() { return []; },
+    async countRows() { return 0; },
+  });
+
+  const internal = asInternal(store);
+  await (internal.createFtsIndexWithRetry as (t: MockTable) => Promise<void>).call(store, table);
+
+  const indexState = internal.indexState as { fts: boolean; ftsError: string };
+  assert.strictEqual(indexState.fts, false, "FTS index should be deferred on empty table");
+  assert.ok(indexState.ftsError.includes("Insufficient data"), "ftsError should contain insufficient data message");
+});
+
+test("createFtsIndexWithRetry: insufficient rows defers index creation", async () => {
+  const store = makeStore();
+
+  const table = makeMockTable({
+    async listIndices() { return []; },
+    async countRows() { return 50; },
+  });
+
+  const internal = asInternal(store);
+  await (internal.createFtsIndexWithRetry as (t: MockTable) => Promise<void>).call(store, table);
+
+  const indexState = internal.indexState as { fts: boolean; ftsError: string };
+  assert.strictEqual(indexState.fts, false, "FTS index should be deferred when rows < 256");
+  assert.ok(indexState.ftsError.includes("50 rows"), "ftsError should include row count");
 });
