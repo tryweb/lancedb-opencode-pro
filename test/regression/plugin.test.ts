@@ -241,6 +241,31 @@ function parseJson<T>(text: string): T {
   return JSON.parse(text) as T;
 }
 
+async function retryWithDelay<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  delayMs = 100,
+  shouldRetry?: (result: T) => boolean,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+    }
+    try {
+      const result = await fn();
+      if (!shouldRetry || !shouldRetry(result)) {
+        return result;
+      }
+      lastError = new Error(`Attempt ${attempt + 1} returned result that needs retry`);
+    } catch (e) {
+      lastError = e;
+      if (attempt === maxAttempts - 1) throw e;
+    }
+  }
+  throw lastError;
+}
+
 test("auto-capture stores qualifying output with decision category and skips short output", async () => {
   const harness = await createPluginHarness({ minCaptureChars: 40 });
 
@@ -438,11 +463,18 @@ test("memory_delete and memory_clear reject destructive operations without confi
 
   try {
     await harness.capture("Resolved successfully after rotating the stale token and reloading the API gateway config.");
-    const searchOutput = await withPatchedFetch(() =>
-      harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
+    // Use retryWithDelay to handle async write delay - search might not find immediately after capture
+    const searchOutput = await retryWithDelay(
+      () =>
+        withPatchedFetch(() =>
+          harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
+        ),
+      3,
+      100,
+      (result) => result === "No relevant memory found." || !result.match(/\[([^\]]+)\]/),
     );
     const recordId = searchOutput.match(/\[([^\]]+)\]/)?.[1];
-    assert.ok(recordId);
+    assert.ok(recordId, `Expected recordId in searchOutput, got: ${searchOutput}`);
     const ensuredRecordId = recordId ?? "";
 
     const deleteRejected = await withPatchedFetch(() =>
