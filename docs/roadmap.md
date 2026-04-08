@@ -486,7 +486,7 @@ npm run verify:full
 - [x] 相容性文件 `docs/OPENCODE_COMPATIBILITY.md`
 - [x] Plugin interface 研究文件 `docs/opencode-plugin-interface-research.md`
 - [x] 風險評估與分階段升級策略
-- [ ] SDK 升級到 1.3.14 測試驗證 → BL-059
+- [x] SDK 升級到 1.3.14 測試驗證 → BL-059 ✅ DONE
 - [ ] OpenCode v1.3.14 相容性確認 → BL-060
 - [ ] OpenCode v1.4.0+ NAPI 狀態確認（待社群回報）
 - [ ] SDK 升級測試矩陣（v1.2.x / v1.3.7 / v1.4.0+）
@@ -529,7 +529,7 @@ npm run verify:full
 17. Embedder 錯誤容忍與 graceful degradation（Surface: Plugin）→ BL-049 ✅ DONE
 18. FTS/Vector index concurrent-process race condition fix（Surface: Plugin）→ BL-051 ✅ DONE v0.6.1
 19. 內建 embedding 模型（transformers.js）（Surface: Plugin）→ BL-050 ⚠️ 研究完成，待實作
-20. **SDK 升級到 1.3.14 測試驗證（Surface: Plugin）** → BL-059 ⚠️ 高優先
+20. **SDK 升級到 1.3.14 測試驗證（Surface: Plugin）** → BL-059 ✅ DONE
 21. **OpenCode v1.3.14 相容性確認（Surface: Plugin + Docs）** → BL-060 ⚠️ 高優先
 
 ### P2

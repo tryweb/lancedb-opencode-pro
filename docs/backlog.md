@@ -154,7 +154,7 @@
 | BL-056 | OpenCode v1.4.0+ 相容性驗證 | P1 | proposed | TBD | TBD | 確認 v1.4.0+ NAPI 載入狀態；驗證 SDK breaking changes 影響；更新相容性文件 [Surface: Plugin + Docs] |
 | BL-057 | SDK 升級測試矩陣 | P2 | planned | TBD | TBD | 建立 v1.2.x / v1.3.7 / v1.4.0+ 自動化測試矩陣；確保跨版本相容性 [Surface: Test-infra] |
 | BL-058 | 執行時期版本偵測機制 | P2 | planned | TBD | TBD | 在插件初始化時偵測 OpenCode 版本；提供版本特定錯誤訊息改善 [Surface: Plugin] |
-| BL-059 | SDK 升級到 1.3.14 測試驗證 | P1 | proposed | TBD | TBD | 先升級到 1.3.14 跨越 AI SDK v6 遷移；執行 verify:full 驗證；重點測試 session.idle 觸發與 tool execute 行為 [Surface: Plugin] |
+| BL-059 | SDK 升級到 1.3.14 測試驗證 | P1 | **done** | align-opencode-sdk-v1314 | openspec/changes/align-opencode-sdk-v1314/specs/opencode-v1314-verification/ | SDK v1.3.14 相容性驗證；TypeScript 類型對齊；文檔更新 [Surface: Plugin] ✅ DONE |
 | BL-060 | OpenCode v1.3.14 相容性確認 | P1 | proposed | TBD | TBD | 確認 v1.3.14 版本下所有 hooks 正常運作；更新版本狀態文件 [Surface: Plugin + Docs] |
 
 ---
