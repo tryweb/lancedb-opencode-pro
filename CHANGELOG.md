@@ -6,6 +6,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.7.0] - 2026-04-09
+
+### Added
+
+- **OpenCode SDK v1.3.14 Compatibility** (user-facing):
+  - Upgraded `@opencode-ai/plugin` from `1.3.7` to `1.3.14`
+  - Upgraded `@opencode-ai/sdk` from `1.3.7` to `1.3.14`
+  - Full compatibility with OpenCode v1.3.14
+  - Evidence:
+    - Spec: N/A (upgrade, no spec required)
+    - Code: package.json (version bump)
+    - Tests: typecheck, build, test:foundation (31 pass)
+    - Surface: opencode-tool
+  - Fixes BL-059
+
+- **Node 22 memory_search Race Condition Fix** (user-facing):
+  - Fixed flaky test `memory_delete and memory_clear reject destructive operations without confirmation` on Node 22
+  - Root cause: fire-and-forget `updateMemoryUsage` call in `memory_search` created race condition
+  - Changed to await the call while catching errors silently to preserve existing behavior
+  - Evidence:
+    - Spec: N/A (bug fix, no spec required)
+    - Code: src/tools/memory.ts (await updateMemoryUsage instead of fire-and-forget)
+    - Tests: test/regression/plugin.test.js (31 pass, 1 pre-existing fail)
+    - Surface: opencode-tool
+  - Fixes #72
+
+---
+
 ## [0.6.3] - 2026-04-08
 
 ### Added
