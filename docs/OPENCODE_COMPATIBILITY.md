@@ -1,8 +1,29 @@
 # OpenCode Compatibility & Troubleshooting Guide
 
-**Last Updated**: April 3, 2026  
+**Last Updated**: April 8, 2026  
 **Status**: Active  
-**Scope**: OpenCode version compatibility, plugin loading, NAPI native addon issues
+**Scope**: OpenCode version compatibility, plugin interface changes, NAPI native addon issues
+
+---
+
+## 📋 Version Compatibility Matrix
+
+| OpenCode Version | Status | LanceDB Native | SDK Breaking Changes | Notes |
+|------------------|--------|-----------------|---------------------|-------|
+| **v1.2.0 - v1.3.7** | ✅ **Stable** | ✅ Working | None | **Recommended** |
+| **v1.3.8 - v1.3.13** | ❌ **Broken** | ❌ Broken | N/A | Known bug (Issue #20623) |
+| **v1.4.0+** | ⚠️ **TBD** | ⏳ Unknown | **Breaking** | Diff metadata + UserMessage changes |
+
+### v1.4.0+ Breaking SDK Changes
+
+If you upgrade to v1.4.0+, be aware of these breaking changes:
+
+| Change | Before (v1.2.x-v1.3.7) | After (v1.4.0+) |
+|--------|------------------------|-----------------|
+| **Diff metadata** | `{to, from, patch}` | `{patch}` only |
+| **UserMessage.variant** | Top-level field | `msg.model.variant` |
+
+**Impact**: Minimal direct impact on lancedb-opencode-pro currently, but future features should use new API.
 
 ---
 
@@ -17,15 +38,9 @@ Memory store unavailable (ollama embedding may be offline). Will retry automatic
 
 And embedding is confirmed working but memory tools persistently fail, **you likely have a native NAPI addon loading issue with OpenCode v1.3.8+**.
 
----
+### Status Update (April 8, 2026)
 
-## 📋 Affected Versions & Status
-
-| OpenCode Version | Status | LanceDB Native Support | Notes |
-|------------------|--------|----------------------|-------|
-| **v1.3.7 and earlier** | ✅ **Stable** | ✅ **Working** | Recommended |
-| **v1.3.8 - v1.3.13** | ❌ **Broken** | ❌ **Broken** | Known bug (Issue #20623) |
-| **v1.4.0+** | ⏳ **Unknown** | ⏳ **TBD** | Monitor releases |
+The NAPI bug in v1.3.8+ may or may not be fixed in v1.4.0+. We are monitoring the situation and will update this document when confirmed.
 
 ### Root Cause (Issue #20623)
 
@@ -220,6 +235,30 @@ console.log('SUCCESS: Store initialized');
 
 ---
 
+## 📚 Plugin Interface Research
+
+See [opencode-plugin-interface-research.md](./opencode-plugin-interface-research.md) for detailed analysis of:
+
+- Breaking SDK changes between v1.2.x and v1.4.0
+- Diff metadata structure changes
+- UserMessage.variant nesting changes
+- Hook API compatibility
+- Real-world plugin implementation patterns
+- Migration path recommendations
+
+### Quick Reference: Hook Stability
+
+| Hook | Stability | Used by Plugin |
+|------|-----------|----------------|
+| `config` | ✅ Stable | ✅ Yes |
+| `event` | ✅ Stable | ✅ Yes |
+| `tool` | ✅ Stable | ✅ Yes |
+| `experimental.text.complete` | ⚠️ Undocumented | ✅ Yes |
+| `experimental.chat.system.transform` | ⚠️ Community-only | ✅ Yes |
+| `session.created`, `session.idle`, `session.end` | ✅ Stable | ✅ Yes (via event hook) |
+
+---
+
 ## 📞 Support & Escalation
 
 ### If Downgrade Works
@@ -293,6 +332,6 @@ Include:
 
 ---
 
-**Last Verified**: April 3, 2026  
-**Tested On**: OpenCode v1.3.13, lancedb-opencode-pro v0.6.0  
-**Status**: Active Issue
+**Last Verified**: April 8, 2026  
+**Tested On**: OpenCode v1.3.13, lancedb-opencode-pro v0.6.3  
+**Status**: Active Issue (v1.3.8+ NAPI), Unknown (v1.4.0+ SDK changes)

@@ -115,6 +115,48 @@
 | BL-046 | DB row runtime 型別驗證 | P1 | **done** | episodic-record-validation | `openspec/changes/episodic-record-validation/` | 降低 `as unknown as EpisodicTaskRecord` 風險；讀取後做 schema validation [Surface: Plugin + Test-infra] |
 | BL-047 | Embedding fallback 與搜尋模式可觀測性補強 | P2 | planned | TBD | TBD | `memory_stats` 新增 `searchMode: "in-memory-cosine" | "native-ivf"` 揭露當前向量搜尋模式；embedding fallback 保留降級語義並補 structured warning + metrics [Surface: Plugin + Docs] |
 
+## Epic 11 — 記憶架構演進（研究驅動）
+
+> 技術研究依據：`docs/long-term-memory-landscape.md`
+> 所有項目均在 LanceDB 之上實現，不引入新儲存後端。
+
+| BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
+|---|---|---|---|---|---|---|
+| BL-052 | 多策略檢索增強（entity-based + temporal filtering） | P2 | planned | TBD | TBD | 在 vector + BM25 基礎上增加 entity 索引與時間過濾；參考 Hindsight 四策略架構 [Surface: Plugin] |
+| BL-053 | 記憶摘要壓縮 | P2 | planned | TBD | TBD | 長期未使用記憶自動摘要；相似記憶合併為知識筆記；參考 HiMem Episode→Note 模式 [Surface: Plugin] |
+| BL-054 | 輕量級實體關係索引 | P2 | planned | TBD | TBD | 為 memory records 增加 entity-relationship metadata；支援關係查詢；以 LanceDB metadata 欄位實現 [Surface: Plugin] |
+| BL-055 | 時態知識追蹤（bi-temporal fact management） | P2 | planned | TBD | TBD | 參考 Graphiti bi-temporal 模型；增加 `validFrom`/`supersededAt`；事實失效而非刪除 [Surface: Plugin] |
+
+## Epic 12 — OpenCode 版本相容性與遷移
+
+> 技術研究依據：`docs/opencode-plugin-interface-research.md`
+> 目標：確保插件在 OpenCode 各版本間的相容性，並建立版本遷移策略。
+
+### 風險評估摘要（2026-04-08）
+
+| 風險等級 | 項目 | 說明 |
+|---------|------|------|
+| 🔴 高 | AI SDK v5 → v6 遷移 | v1.3.4 引入，可能影響 session.idle / tool hooks |
+| 🟡 中 | Tool.define() bug 修復 | v1.3.14，可能改變 17 個 tools 的 execute 行為 |
+| 🟡 中 | Plugin 安裝機制改變 | v1.3.11，需確認 prepublishOnly 正常運作 |
+| 🟢 低 | v1.4.0 本身 | 新功能對本 plugin 無關，但今日發布未驗證 |
+
+### 升級策略
+
+```
+1.2.25 → 1.3.14 → (觀察 1-2 週) → 1.4.x（穩定後）
+```
+
+### Backlog 項目
+
+| BL-ID | Title | Priority | Status | OpenSpec Change ID | Spec Path | Notes |
+|---|---|---|---|---|---|---|
+| BL-056 | OpenCode v1.4.0+ 相容性驗證 | P1 | proposed | TBD | TBD | 確認 v1.4.0+ NAPI 載入狀態；驗證 SDK breaking changes 影響；更新相容性文件 [Surface: Plugin + Docs] |
+| BL-057 | SDK 升級測試矩陣 | P2 | planned | TBD | TBD | 建立 v1.2.x / v1.3.7 / v1.4.0+ 自動化測試矩陣；確保跨版本相容性 [Surface: Test-infra] |
+| BL-058 | 執行時期版本偵測機制 | P2 | planned | TBD | TBD | 在插件初始化時偵測 OpenCode 版本；提供版本特定錯誤訊息改善 [Surface: Plugin] |
+| BL-059 | SDK 升級到 1.3.14 測試驗證 | P1 | proposed | TBD | TBD | 先升級到 1.3.14 跨越 AI SDK v6 遷移；執行 verify:full 驗證；重點測試 session.idle 觸發與 tool execute 行為 [Surface: Plugin] |
+| BL-060 | OpenCode v1.3.14 相容性確認 | P1 | proposed | TBD | TBD | 確認 v1.3.14 版本下所有 hooks 正常運作；更新版本狀態文件 [Surface: Plugin + Docs] |
+
 ---
 
 ## 建議執行切片（索引版）
@@ -135,6 +177,15 @@ BL-036, BL-037, BL-048, BL-049, BL-050
 
 ### Release E（架構可維護性與效能硬化）— 📝 PLANNED
 BL-041, BL-043, BL-044, BL-045, BL-046, BL-047
+
+### Release F（記憶架構演進）— 🔬 RESEARCH
+BL-052, BL-053, BL-054, BL-055
+> 研究依據：`docs/long-term-memory-landscape.md`
+
+### Release G（OpenCode 版本相容性）— 🔬 RESEARCH
+BL-056, BL-057, BL-058, BL-059, BL-060
+> 研究依據：`docs/opencode-plugin-interface-research.md`
+> 升級策略：1.2.25 → 1.3.14 → (觀察) → 1.4.x
 
 ---
 
