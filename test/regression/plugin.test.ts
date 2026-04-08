@@ -458,15 +458,8 @@ test("memory_delete and memory_clear reject destructive operations without confi
 
   try {
     await harness.capture("Resolved successfully after rotating the stale token and reloading the API gateway config.");
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const searchOutput = await retryWithDelay(
-      () =>
-        withPatchedFetch(() =>
-          harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
-        ),
-      5,
-      150,
-      (result) => result === "No relevant memory found." || !result.match(/\[([^\]]+)\]/),
+    const searchOutput = await withPatchedFetch(() =>
+      harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
     );
     const recordId = searchOutput.match(/\[([^\]]+)\]/)?.[1];
     assert.ok(recordId, `Expected recordId in searchOutput, got: ${searchOutput}`);

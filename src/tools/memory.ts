@@ -118,7 +118,10 @@ export function createMemoryTools(state: ToolRuntimeState) {
         if (results.length === 0) return "No relevant memory found.";
 
         for (const result of results) {
-          state.store.updateMemoryUsage(result.record.id, activeScope, scopes).catch(() => {});
+          try {
+            await state.store.updateMemoryUsage(result.record.id, activeScope, scopes);
+          } catch {
+          }
         }
 
         return results
