@@ -6,6 +6,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.6.3] - 2026-04-08
+
+### Added
+
+- **Index Creation Guard for Empty Tables** (user-facing):
+  - Added row count check before attempting vector/FTS index creation to prevent noisy error messages
+  - LanceDB IVF/PQ indices require ≥256 rows for training data
+  - Silently defers index creation with info-level log instead of 3 retry error messages
+  - Evidence:
+    - Spec: N/A (bug fix, no spec required)
+    - Code: src/store.ts (MIN_ROWS_FOR_INDEX constant, countRows guard in createVectorIndexWithRetry/createFtsIndexWithRetry)
+    - Tests: test/unit/index-race-condition.test.ts (6 new test cases)
+    - Surface: internal-api
+  - Fixes #70
+
+### Changed
+
+- **LanceDB Version Bump** (internal-only):
+  - Upgraded `@lancedb/lancedb` from `0.27.1` to `0.27.2`
+  - Evidence:
+    - Code: package.json, package-lock.json
+    - Tests: typecheck, build, test:foundation (31 pass), test:retrieval (2 pass)
+  - Related: #69
+
+### Documentation
+
+- **Test Database Directories** (internal-only):
+  - Added test database directories to .gitignore
+  - Evidence:
+    - Code: .gitignore
+
+---
+
 ## [0.6.2] - 2026-04-05
 
 ### Added

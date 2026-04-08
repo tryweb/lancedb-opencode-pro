@@ -166,6 +166,7 @@ docker compose exec opencode-dev npm run verify:full
 
 ## 🗺️ 版本歷史
 
+- **v0.6.3**: 索引建立守衛（空表/不足資料時延後建立，修復 #70）、LanceDB 0.27.2
 - **v0.6.2**: 修復索引競爭條件（並發衝突處理、jitter 重試）
 - **v0.6.1**: 事件 TTL/歸檔、索引建立彈性、去重複效能優化
 - **v0.6.0**: 新增學習儀表板、KPI 管線、反饋驅動排序、任務類型感知注入
@@ -191,5 +192,5 @@ _[舊版歷史請參閱 CHANGELOG.md]_
 - **報告問題**: 軟體錯誤回報或功能請求，請至 [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues) 提交。
 - **授權協議**: MIT License - 詳見 [LICENSE](LICENSE)。
 
-**最後更新**: 2026-04-05
+**最後更新**: 2026-04-08
 **最新版本**: v0.6.2
