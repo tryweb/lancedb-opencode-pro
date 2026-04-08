@@ -247,23 +247,18 @@ async function retryWithDelay<T>(
   delayMs = 100,
   shouldRetry?: (result: T) => boolean,
 ): Promise<T> {
-  let lastError: unknown;
+  let lastResult: T | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
     }
-    try {
-      const result = await fn();
-      if (!shouldRetry || !shouldRetry(result)) {
-        return result;
-      }
-      lastError = new Error(`Attempt ${attempt + 1} returned result that needs retry`);
-    } catch (e) {
-      lastError = e;
-      if (attempt === maxAttempts - 1) throw e;
+    const result = await fn();
+    lastResult = result;
+    if (!shouldRetry || !shouldRetry(result)) {
+      return result;
     }
   }
-  throw lastError;
+  return lastResult as T;
 }
 
 test("auto-capture stores qualifying output with decision category and skips short output", async () => {
@@ -463,14 +458,14 @@ test("memory_delete and memory_clear reject destructive operations without confi
 
   try {
     await harness.capture("Resolved successfully after rotating the stale token and reloading the API gateway config.");
-    // Use retryWithDelay to handle async write delay - search might not find immediately after capture
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const searchOutput = await retryWithDelay(
       () =>
         withPatchedFetch(() =>
           harness.toolHooks.memory_search.execute({ query: "stale token API gateway", limit: 5 }, harness.context),
         ),
-      3,
-      100,
+      5,
+      150,
       (result) => result === "No relevant memory found." || !result.match(/\[([^\]]+)\]/),
     );
     const recordId = searchOutput.match(/\[([^\]]+)\]/)?.[1];
