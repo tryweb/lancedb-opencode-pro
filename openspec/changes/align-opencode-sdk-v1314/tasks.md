@@ -15,8 +15,11 @@
 
 ## 3. Full Verification Suite Execution
 
-- [x] 3.1 Run `npm run typecheck` inside Docker container
-- [x] 3.2 Run `npm run build` inside Docker container
+**NOTE**: Tests require Docker environment. Completed in Docker-ready environment:
+- ✅ TypeScript typecheck passes (with type fix)
+- ✅ Build succeeds
+
+**Pending** (requires manual Docker execution):
 - [ ] 3.3 Run `npm run test:foundation` to validate session.idle hook
 - [ ] 3.4 Run `npm run test:regression` to validate 17 tool execute behaviors
 - [ ] 3.5 Run `npm run test:retrieval` to validate memory retrieval
@@ -26,6 +29,7 @@
 
 ## 4. Focused Hook Validation
 
+**NOTE**: Requires Docker container running OpenCode v1.3.14
 - [ ] 4.1 Validate session.idle hook triggers after session becomes idle
 - [ ] 4.2 Validate auto-capture writes memory to LanceDB store
 - [ ] 4.3 Validate experimental.chat.system.transform hook injects memories
@@ -34,6 +38,7 @@
 
 ## 5. End-to-End Flow Validation
 
+**NOTE**: Requires Docker container running OpenCode v1.3.14
 - [ ] 5.1 Run `npm run test:e2e` to validate complete write-restart-search flow
 - [ ] 5.2 Manually test memory write in v1.3.14 environment
 - [ ] 5.3 Restart OpenCode server to test persistence
