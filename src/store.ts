@@ -16,6 +16,7 @@ type LanceTable = {
   addColumns(transforms: Array<{ name: string; valueSql: string }>): Promise<unknown>;
   delete(filter: string): Promise<void>;
   schema(): Promise<{ fields: Array<{ name: string }> }>;
+  countRows(filter?: string): Promise<number>;
   query(): {
     where(expr: string): ReturnType<LanceTable["query"]>;
     select(columns: string[]): ReturnType<LanceTable["query"]>;
@@ -69,6 +70,7 @@ export function storeFastCosine(a: number[], b: number[], normA: number, normB: 
 }
 
 export class MemoryStore {
+  private static readonly MIN_ROWS_FOR_INDEX = 256;
   private lancedb: LanceModule | null = null;
   private connection: LanceConnection | null = null;
   private table: LanceTable | null = null;
@@ -2069,6 +2071,13 @@ export class MemoryStore {
       return;
     }
 
+    const rowCount = await table.countRows();
+    if (rowCount < MemoryStore.MIN_ROWS_FOR_INDEX) {
+      console.log(`[store] Deferring vector index creation: ${rowCount} rows found (need ≥ ${MemoryStore.MIN_ROWS_FOR_INDEX})`);
+      this.indexState.vector = false;
+      return;
+    }
+
     let lastErrorMsg = "";
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -2126,6 +2135,14 @@ export class MemoryStore {
     if (existingIndices.some(idx => idx.name === "text")) {
       console.log("[store] FTS index already exists, skipping creation");
       this.indexState.fts = true;
+      return;
+    }
+
+    const rowCount = await table.countRows();
+    if (rowCount < MemoryStore.MIN_ROWS_FOR_INDEX) {
+      console.log(`[store] Deferring FTS index creation: ${rowCount} rows found (need ≥ ${MemoryStore.MIN_ROWS_FOR_INDEX})`);
+      this.indexState.fts = false;
+      this.indexState.ftsError = `Insufficient data: ${rowCount} rows (need ≥ ${MemoryStore.MIN_ROWS_FOR_INDEX})`;
       return;
     }
 
