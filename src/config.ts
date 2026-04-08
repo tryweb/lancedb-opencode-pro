@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Config } from "@opencode-ai/sdk";
+import type { Config } from "@opencode-ai/plugin";
 import type { DedupConfig, EmbeddingProvider, InjectionMode, SummarizationMode, CodeTruncationMode, MemoryRuntimeConfig, RetrievalMode } from "./types.js";
 import { clamp, expandHomePath, parseJsonObject, toBoolean, toNumber } from "./utils.js";
 

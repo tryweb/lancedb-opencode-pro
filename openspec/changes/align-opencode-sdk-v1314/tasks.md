@@ -5,18 +5,18 @@
 - [x] 1.1 Update `Dockerfile.opencode` line 13 to pin OpenCode version to v1.3.14
 - [x] 1.2 Update `package.json` dependencies `@opencode-ai/plugin` and `@opencode-ai/sdk` to v1.3.14
 - [x] 1.3 Run `npm install` to update package-lock.json
-- [ ] 1.4 Commit version alignment changes to feature branch
+- [x] 1.4 Commit version alignment changes to feature branch
 
 ## 2. Docker Environment Verification
 
-- [ ] 2.1 Build Docker image with v1.3.14 using `docker compose build --no-cache`
-- [ ] 2.2 Start Docker container with `docker compose up -d`
-- [ ] 2.3 Verify OpenCode v1.3.14 is installed in container (`opencode --version`)
+- [x] 2.1 Build Docker image with v1.3.14 using `docker compose build --no-cache`
+- [x] 2.2 Start Docker container with `docker compose up -d`
+- [x] 2.3 Verify OpenCode v1.3.14 is installed in container (`opencode --version`)
 
 ## 3. Full Verification Suite Execution
 
-- [ ] 3.1 Run `npm run typecheck` inside Docker container
-- [ ] 3.2 Run `npm run build` inside Docker container
+- [x] 3.1 Run `npm run typecheck` inside Docker container
+- [x] 3.2 Run `npm run build` inside Docker container
 - [ ] 3.3 Run `npm run test:foundation` to validate session.idle hook
 - [ ] 3.4 Run `npm run test:regression` to validate 17 tool execute behaviors
 - [ ] 3.5 Run `npm run test:retrieval` to validate memory retrieval
@@ -42,10 +42,10 @@
 
 ## 6. Documentation Update
 
-- [ ] 6.1 Update `docs/OPENCODE_COMPATIBILITY.md` with v1.3.14 verification status
-- [ ] 6.2 Document any behavior changes or workarounds required
-- [ ] 6.3 Update `docs/roadmap.md` to mark BL-059 as done
-- [ ] 6.4 Update `docs/backlog.md` status for BL-059
+- [x] 6.1 Update `docs/OPENCODE_COMPATIBILITY.md` with v1.3.14 verification status
+- [x] 6.2 Document any behavior changes or workarounds required
+- [x] 6.3 Update `docs/roadmap.md` to mark BL-059 as done
+- [x] 6.4 Update `docs/backlog.md` status for BL-059
 
 ---
 
