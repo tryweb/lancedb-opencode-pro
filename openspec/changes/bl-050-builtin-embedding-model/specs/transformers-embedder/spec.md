@@ -132,3 +132,31 @@ The system SHALL recognize that the model uses ONNX format for cross-platform co
 - **WHEN** the model is loaded
 - **THEN** it SHALL use the quantized ONNX version (~23MB) for reduced download size
 - **NOTE**: Quantization has <1% accuracy impact, acceptable for memory search use case
+
+### Requirement: Offline mode configuration
+The system SHALL support offline/local model usage for air-gapped environments.
+
+#### Scenario: Offline mode via environment variable
+- **WHEN** environment variable `TRANSFORMERS_OFFLINE=1` or `HF_HUB_OFFLINE=1` is set
+- **THEN** transformers.js SHALL NOT attempt to download models from HuggingFace Hub
+- **NOTE**: If model is not cached locally, it SHALL fail with descriptive error
+
+#### Scenario: Local model path configuration
+- **WHEN** environment variable `TRANSFORMERS_CACHE` or `HF_HOME` points to a directory containing pre-downloaded models
+- **THEN** TransformersEmbedder SHALL load models from the specified local path
+- **NOTE**: Model files must be in the expected directory structure (e.g., models/Xenova--all-MiniLM-L6-v2/)
+
+#### Scenario: Pre-downloaded model detection
+- **WHEN** transformers.js attempts to load a model
+- **THEN** it SHALL first check local cache before attempting remote download
+
+### Requirement: Offline-first usage documentation
+The system SHALL document the recommended workflow for offline/air-gapped deployment.
+
+#### Scenario: Preparing for offline use
+- **WHEN** user wants to use transformers provider in an air-gapped environment
+- **THEN** they SHALL:
+  1. Run once with internet to trigger model download
+  2. Copy the cache directory (default: `./.cache/`) to the air-gapped machine
+  3. Set `TRANSFORMERS_CACHE=/path/to/copied-cache` on the air-gapped machine
+  4. Set `HF_HUB_OFFLINE=1` to prevent any network attempts
