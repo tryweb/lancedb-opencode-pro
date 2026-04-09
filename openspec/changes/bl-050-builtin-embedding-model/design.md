@@ -125,6 +125,45 @@ The solution uses `@xenova/transformers` (transformers.js) which runs inference 
 **Risk**: Adding @xenova/transformers increases package size.
 **Mitigation**: Mark as optional peer dependency. Only install if provider selected.
 
+### Option Analysis: Bundling Model vs Downloading
+
+This design follows the **download on demand** approach (default transformers.js behavior) rather than bundling the model in the npm package.
+
+#### Bundle Model in npm (Not Recommended)
+
+| Aspect | Assessment |
+|--------|------------|
+| Model size (Q4) | ~23 MB (feasible) |
+| Total package increase | ~25-30 MB |
+| npm limit | ~200 MB before E413 error |
+| Vite/Rollup issues | May inline .onnx as base64 → 66MB+ JS |
+| Model updates | Requires package re-publish |
+
+**Why not bundled**:
+1. Adds ~25MB to package size
+2. Bundler may inline large files causing OOM
+3. Model updates require package re-publish
+4. Faster installs with download-on-demand
+
+#### Download on Demand (Selected)
+
+| Aspect | Assessment |
+|--------|------------|
+| First use | Downloads ~23MB from HuggingFace |
+| Cached | Subsequent uses use local cache |
+| Offline | Use `HF_HUB_OFFLINE=1` + pre-download |
+| Zero config | Works out-of-box |
+
+#### Recommended Offline Workflow
+
+For air-gapped environments:
+1. Run once with internet (model downloads to `.cache/`)
+2. Copy cache to air-gapped machine
+3. Set `TRANSFORMERS_CACHE=/path/to/cache`
+4. Set `HF_HUB_OFFLINE=1`
+
+**See spec**: `Offline mode configuration` requirements
+
 ### Performance Comparison: transformers.js vs Ollama
 
 Based on benchmark research:
