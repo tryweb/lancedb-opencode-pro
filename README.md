@@ -173,13 +173,12 @@ Alternatively, install via `.tgz` release asset or build from source. See [Insta
 
 ## 🗺️ Version History
 
+- **v0.8.0**: Structured Logging via client.app.log() per OpenCode best practices, Test Environment Isolation Fix
 - **v0.7.0**: OpenCode SDK v1.3.14 Compatibility, Node 22 memory_search Race Condition Fix
 - **v0.6.3**: Index Creation Guard (defer on empty/insufficient tables, fix #70), LanceDB 0.27.2
 - **v0.6.2**: Index Race Condition Fix (concurrent-process conflict handling, jitter backoff)
 - **v0.6.1**: Event TTL/Archival, Index Creation Resilience, Duplicate Consolidation Performance
 - **v0.6.0**: Learning Dashboard, KPI Pipeline, Feedback-Driven Ranking, Task-Type Aware Injection
-- **v0.5.0**: Memory Explanation Tools (`memory_why`, `memory_explain_recall`)
-- **v0.4.0**: Citation Model (`memory_citation`, `memory_validate_citation`)
 
 _[older versions removed - see CHANGELOG.md for full history]_
 
@@ -201,4 +200,4 @@ See [CHANGELOG.md](CHANGELOG.md) for all changes.
 - **License**: MIT License - see [LICENSE](LICENSE).
 
 **Last Updated**: 2026-04-09
-**Latest Version**: v0.7.0
+**Latest Version**: v0.8.0

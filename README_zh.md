@@ -166,13 +166,12 @@ docker compose exec opencode-dev npm run verify:full
 
 ## 🗺️ 版本歷史
 
+- **v0.8.0**: 結構化日誌 (client.app.log()) 遵循 OpenCode 最佳實踐、測試環境隔離修復
 - **v0.7.0**: OpenCode SDK v1.3.14 相容性、Node 22 memory_search 競爭條件修復
 - **v0.6.3**: 索引建立守衛（空表/不足資料時延後建立，修復 #70）、LanceDB 0.27.2
 - **v0.6.2**: 修復索引競爭條件（並發衝突處理、jitter 重試）
 - **v0.6.1**: 事件 TTL/歸檔、索引建立彈性、去重複效能優化
 - **v0.6.0**: 新增學習儀表板、KPI 管線、反饋驅動排序、任務類型感知注入
-- **v0.5.0**: 新增記憶解釋工具 (`memory_why`, `memory_explain_recall`)
-- **v0.4.0**: 新增引用模型追蹤與驗證 (`memory_citation`, `memory_validate_citation`)
 
 _[舊版歷史請參閱 CHANGELOG.md]_
 
@@ -194,4 +193,4 @@ _[舊版歷史請參閱 CHANGELOG.md]_
 - **授權協議**: MIT License - 詳見 [LICENSE](LICENSE)。
 
 **最後更新**: 2026-04-09
-**最新版本**: v0.7.0
+**最新版本**: v0.8.0

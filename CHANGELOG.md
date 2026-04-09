@@ -6,6 +6,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.8.0] - 2026-04-09
+
+### Added
+
+- **Structured Logging via client.app.log()** (user-facing):
+  - Replaced all `console.warn`/`console.info` calls with structured logging via OpenCode SDK's `client.app.log()`
+  - Added plugin version logging on initialization
+  - Centralized logging in new `src/logger.ts` module with console fallback for non-OpenCode environments
+  - Evidence:
+    - Spec: N/A (best practice, no spec required)
+    - Code: src/logger.ts (new), src/index.ts, src/embedder.ts, src/tools/memory.ts (log calls replaced)
+    - Tests: test:foundation (31 pass), test:regression (32 pass)
+    - Surface: internal-api
+  - Fixes #77
+
+- **Test Environment Isolation Fix** (internal):
+  - Enhanced `withPatchedEnv` utility to support `undefined` values for explicit env var cleanup
+  - Fixed test isolation issue where host `LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL` was leaking into test environment
+  - Evidence:
+    - Spec: N/A (test infrastructure fix)
+    - Code: test/config.test.ts, test/regression/plugin.test.ts (withPatchedEnv upgrade)
+    - Tests: test:regression (32 pass, was 31 pass 1 fail)
+    - Surface: internal-api
+
+---
+
 ## [0.7.0] - 2026-04-09
 
 ### Added
