@@ -37,7 +37,6 @@ The solution uses `@xenova/transformers` (transformers.js) which runs inference 
 **Goals:**
 - Add new `TransformersEmbedder` class implementing the `Embedder` interface
 - Support provider config `"transformers"` 
-- Default model: `Xenova/all-MiniLM-L6-v2` (384 dimensions, ~23MB quantized ONNX)
 - Model loaded once and cached in memory for subsequent embeddings
 - Seamless fallback to existing providers when transformers unavailable
 
@@ -46,6 +45,16 @@ The solution uses `@xenova/transformers` (transformers.js) which runs inference 
 - Model fine-tuning or training
 - Multiple simultaneous models (singleton pattern)
 - Mobile/React Native support (different runtime)
+
+### Default Model by Provider
+
+| Provider | Default Model | Vector Dimension | Size |
+|----------|---------------|------------------|------|
+| `ollama` | `nomic-embed-text` | 768 | ~274 MB |
+| `openai` | `text-embedding-3-small` | 1536 | API-managed |
+| `transformers` | `Xenova/all-MiniLM-L6-v2` | 384 | ~23 MB |
+
+**Note**: Each provider has its own default model that represents the best practice for that runtime.
 
 ## Decisions
 

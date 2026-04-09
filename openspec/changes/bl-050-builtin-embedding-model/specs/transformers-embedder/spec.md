@@ -55,6 +55,31 @@ The system SHALL support configuration of the transformers provider through the 
 - **WHEN** config contains `embedding.model: "Xenova/all-mpnet-base-v2"`
 - **THEN** the `TransformersEmbedder` SHALL use that model instead of default
 
+### Requirement: Provider-default model mapping
+The system SHALL use the appropriate default model for each provider.
+
+#### Scenario: transformers provider uses default model
+- **WHEN** `embedding.provider` is set to `"transformers"` without specifying `model`
+- **THEN** it SHALL default to `Xenova/all-MiniLM-L6-v2` (384 dimensions)
+
+#### Scenario: Provider-specific defaults documented
+- **WHEN** user configures any embedding provider
+- **THEN** the system SHALL follow this default model mapping:
+  - `provider: "ollama"` → default model: `nomic-embed-text` (768 dimensions)
+  - `provider: "openai"` → default model: `text-embedding-3-small` (1536 dimensions)  
+  - `provider: "transformers"` → default model: `Xenova/all-MiniLM-L6-v2` (384 dimensions)
+
+### Requirement: Transformers-specific config behavior
+The system SHALL ignore certain config fields that are not applicable to transformers provider.
+
+#### Scenario: baseUrl ignored for transformers
+- **WHEN** `embedding.provider` is `"transformers"` and `embedding.baseUrl` is set
+- **THEN** the baseUrl SHALL be ignored (transformers.js runs locally)
+
+#### Scenario: apiKey ignored for transformers
+- **WHEN** `embedding.provider` is `"transformers"` and `embedding.apiKey` is set
+- **THEN** the apiKey SHALL be ignored (transformers.js is offline-capable)
+
 ### Requirement: Error handling
 The system SHALL handle errors gracefully when transformers.js fails.
 
