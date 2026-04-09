@@ -57,11 +57,15 @@ async function withPatchedFetch<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-async function withPatchedEnv<T>(values: Record<string, string>, run: () => Promise<T>): Promise<T> {
+async function withPatchedEnv<T>(values: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(values)) {
     previous.set(key, process.env[key]);
-    process.env[key] = value;
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
   }
 
   try {
@@ -350,6 +354,8 @@ test("resolveMemoryConfig fails fast for openai without model", async () => {
       LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER: "openai",
       LANCEDB_OPENCODE_PRO_OPENAI_API_KEY: "test-openai-api-key",
       LANCEDB_OPENCODE_PRO_SKIP_SIDECAR: "true",
+      LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL: undefined,
+      LANCEDB_OPENCODE_PRO_OPENAI_MODEL: undefined,
     },
     async () => {
       assert.throws(

@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveMemoryConfig } from "../src/config.js";
 
-async function withPatchedEnv<T>(values: Record<string, string>, run: () => T): Promise<T> {
+async function withPatchedEnv<T>(values: Record<string, string | undefined>, run: () => T): Promise<T> {
   const oldValues: Record<string, string | undefined> = {};
   for (const key of Object.keys(values)) {
     oldValues[key] = process.env[key];
-    process.env[key] = values[key];
+    if (values[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = values[key] as string;
+    }
   }
   try {
     return run();
