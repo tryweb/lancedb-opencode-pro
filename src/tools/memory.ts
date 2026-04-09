@@ -2,6 +2,7 @@ import { tool } from "@opencode-ai/plugin";
 import { deriveProjectScope, buildScopeFilter } from "../scope.js";
 import { generateId } from "../utils.js";
 import { getEmbedderHealth, type Embedder } from "../embedder.js";
+import { log } from "../logger.js";
 import type { MemoryStore } from "../store.js";
 import type { MemoryRuntimeConfig, MemoryCategory, CitationStatus, ValidationOutcome } from "../types.js";
 
@@ -68,7 +69,7 @@ export function createMemoryTools(state: ToolRuntimeState) {
         const effectiveBm25Weight = isFallback ? 1 : (state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight);
 
         if (isFallback) {
-          console.info(`[lancedb-opencode-pro] Using BM25-only search (embedder unavailable)`);
+          log("info", "Using BM25-only search (embedder unavailable)");
         }
 
         const results = await state.store.search({

@@ -10,8 +10,11 @@ import { MemoryStore } from "./store.js";
 import type { CaptureOutcome, CaptureSkipReason, EpisodicTaskRecord, FailureType, LastRecallSession, MemoryRuntimeConfig, PreferenceProfile, SearchResult, SuccessPattern, TaskState, TaskType, ValidationOutcome, ValidationType } from "./types.js";
 import { validateEpisodicRecordArray } from "./types.js";
 import { generateId } from "./utils.js";
+import { initLogger, log } from "./logger.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 import { createMemoryTools, createFeedbackTools, createEpisodicTools, type ToolRuntimeState } from "./tools/index.js";
+
+const PLUGIN_VERSION = "0.7.0";
 
 const SCHEMA_VERSION = 1;
 
@@ -71,6 +74,9 @@ function getCategoryWeights(taskType: TaskType, profiles: Record<TaskType, { cat
 }
 
 const plugin: Plugin = async (input) => {
+  initLogger(input.client);
+  log("info", `Plugin v${PLUGIN_VERSION} initialized`);
+
   const state = await createRuntimeState(input);
 
   const hooks: Hooks = {
@@ -136,7 +142,7 @@ const plugin: Plugin = async (input) => {
         queryVector = await state.embedder.embed(query);
       } catch (error) {
         embedderFailed = true;
-        console.warn(`[lancedb-opencode-pro] embedding unavailable during recall: ${toErrorMessage(error)}`);
+        log("warn", `embedding unavailable during recall: ${toErrorMessage(error)}`);
         queryVector = [];
       }
 
@@ -145,7 +151,7 @@ const plugin: Plugin = async (input) => {
       const effectiveBm25Weight = isFallback ? 1 : (state.config.retrieval.mode === "vector" ? 0 : state.config.retrieval.bm25Weight);
 
       if (isFallback) {
-        console.info(`[lancedb-opencode-pro] Using BM25-only search (embedder unavailable)`);
+        log("info", "Using BM25-only search (embedder unavailable)");
       }
 
       const results = await state.store.search({
@@ -279,7 +285,7 @@ const plugin: Plugin = async (input) => {
           );
         }
       } catch (error) {
-        console.warn(`[lancedb-opencode-pro] similar task recall failed: ${toErrorMessage(error)}`);
+        log("warn", `similar task recall failed: ${toErrorMessage(error)}`);
       }
 
       eventOutput.system.push(blocks.join("\n\n"));
@@ -320,9 +326,7 @@ async function createRuntimeState(input: Parameters<Plugin>[0]): Promise<Runtime
         await state.store.init(dim);
         state.initialized = true;
       } catch (error) {
-        console.warn(
-          `[lancedb-opencode-pro] initialization deferred: ${toErrorMessage(error)}`,
-        );
+        log("warn", `initialization deferred: ${toErrorMessage(error)}`);
       }
     },
   };
@@ -399,7 +403,7 @@ async function getLastUserText(
   try {
     vector = await state.embedder.embed(result.candidate.text);
   } catch (error) {
-    console.warn(`[lancedb-opencode-pro] embedding unavailable during auto-capture: ${toErrorMessage(error)}`);
+    log("warn", `embedding unavailable during auto-capture: ${toErrorMessage(error)}`);
     await recordCaptureEvent(state, {
       sessionID,
       scope: activeScope,
@@ -411,7 +415,7 @@ async function getLastUserText(
   }
 
   if (vector.length === 0) {
-    console.warn("[lancedb-opencode-pro] auto-capture skipped because embedding vector is empty");
+    log("warn", "auto-capture skipped because embedding vector is empty");
     await recordCaptureEvent(state, {
       sessionID,
       scope: activeScope,

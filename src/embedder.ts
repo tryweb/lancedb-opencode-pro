@@ -1,4 +1,5 @@
 import type { EmbedderHealth, EmbedderRetryConfig, EmbeddingConfig } from "./types.js";
+import { log } from "./logger.js";
 
 export interface Embedder {
   readonly model: string;
@@ -63,7 +64,7 @@ async function embedWithRetry(
       globalEmbedderHealth.lastError = null;
       if (globalEmbedderHealth.status === "degraded") {
         globalEmbedderHealth.status = "healthy";
-        console.info(`[lancedb-opencode-pro] Embedder recovered, resuming normal mode`);
+        log("info", "Embedder recovered, resuming normal mode");
       }
       return result;
     } catch (error) {
@@ -78,18 +79,14 @@ async function embedWithRetry(
       const delay = Math.floor(
         retry.initialDelayMs * Math.pow(retry.backoffMultiplier, attempt - 1),
       );
-      console.warn(
-        `[lancedb-opencode-pro] Embedder failed (attempt ${attempt}/${retry.maxAttempts}), retrying in ${delay}ms: ${lastError.message}`,
-      );
+      log("warn", `Embedder failed (attempt ${attempt}/${retry.maxAttempts}), retrying in ${delay}ms: ${lastError.message}`);
       await sleep(delay);
     }
   }
 
   globalEmbedderHealth.status = "degraded";
   globalEmbedderHealth.fallbackActive = true;
-  console.warn(
-    `[lancedb-opencode-pro] Embedder unavailable after ${retry.maxAttempts} attempts, falling back to BM25-only search`,
-  );
+  log("warn", `Embedder unavailable after ${retry.maxAttempts} attempts, falling back to BM25-only search`);
   throw lastError;
 }
 
@@ -218,9 +215,7 @@ export class OllamaEmbedder implements Embedder {
     } catch {
       const fb = fallbackDim(this.model);
       if (fb !== null) {
-        console.warn(
-          `[lancedb-opencode-pro] Ollama unreachable, using fallback dim ${fb} for model "${this.model}"`,
-        );
+        log("warn", `Ollama unreachable, using fallback dim ${fb} for model "${this.model}"`);
         return fb;
       }
       throw new Error(
@@ -296,9 +291,7 @@ export class OpenAIEmbedder implements Embedder {
     } catch {
       const fb = fallbackDim(this.model);
       if (fb !== null) {
-        console.warn(
-          `[lancedb-opencode-pro] OpenAI embedding probe failed, using fallback dim ${fb} for model "${this.model}"`,
-        );
+        log("warn", `OpenAI embedding probe failed, using fallback dim ${fb} for model "${this.model}"`);
         return fb;
       }
       throw new Error(
