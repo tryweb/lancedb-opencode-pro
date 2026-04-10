@@ -2,7 +2,7 @@ import assert from "node:assert";
 import test from "node:test";
 
 const CODING_KEYWORDS = ["bug", "error", "function", "refactor", "implement", "fix", "code", "class", "module", "import", "export", "async", "await", "typescript", "javascript", "python", "debug", "stack", "trace"];
-const DOCS_KEYWORDS = ["document", "readme", "explain", "describe", "what is", "how to", "guide", "tutorial", "reference", "api", "specification", "write", "create doc"];
+const DOCS_KEYWORDS = ["document", "readme", "explain", "describe", "guide", "tutorial", "reference", "api", "specification", "write", "create doc"];
 const REVIEW_KEYWORDS = ["review", "pr", "pull request", "check", "approve", "reject", "comment", "feedback", "lgtm", "nitpick"];
 const RELEASE_KEYWORDS = ["deploy", "release", "version", "build", "publish", "npm", "docker", "ci", "cd", "pipeline", "rollback"];
 
