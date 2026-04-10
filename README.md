@@ -199,5 +199,5 @@ See [CHANGELOG.md](CHANGELOG.md) for all changes.
 - **Issues**: Submit errors or requests on [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues).
 - **License**: MIT License - see [LICENSE](LICENSE).
 
-**Last Updated**: 2026-04-09
-**Latest Version**: v0.8.0
+**Last Updated**: 2026-04-10
+**Latest Version**: v0.8.1
