@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.8.1] - 2026-04-10
+
+### Changed
+
+- **@opencode-ai/sdk and plugin upgrade** (dependency):
+  - Upgrade @opencode-ai/plugin: 1.3.14 → 1.4.3
+  - Upgrade @opencode-ai/sdk: 1.3.14 → 1.4.3
+  - Evidence:
+    - Spec: N/A (dependency bump)
+    - Code: package.json, Dockerfile.opencode (OpenCode 1.4.3)
+    - Tests: test:verify (199 pass), test:e2e (all pass)
+    - Surface: internal-dependency
+  - Fixes N/A
+
+---
+
 ## [0.8.0] - 2026-04-09
 
 ### Added

@@ -1,0 +1,4 @@
+[test]
+# Exclude compiled JS output (dist-test/) - these are run via node --test in package.json scripts.
+# Excluding benchmark tests - they require a high timeout and are run via benchmark:latency script.
+pathIgnorePatterns = ["dist-test/**", "test/benchmark/**"]

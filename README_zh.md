@@ -192,5 +192,5 @@ _[舊版歷史請參閱 CHANGELOG.md]_
 - **報告問題**: 軟體錯誤回報或功能請求，請至 [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues) 提交。
 - **授權協議**: MIT License - 詳見 [LICENSE](LICENSE)。
 
-**最後更新**: 2026-04-09
-**最新版本**: v0.8.0
+**最後更新**: 2026-04-10
+**最新版本**: v0.8.1
