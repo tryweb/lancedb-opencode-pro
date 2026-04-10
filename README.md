@@ -3,7 +3,7 @@
 **LanceDB-backed long-term memory provider for OpenCode**
 
 [![npm version](https://img.shields.io/npm/v/lancedb-opencode-pro)](https://www.npmjs.com/package/lancedb-opencode-pro)
-[![OpenCode](https://img.shields.io/badge/OpenCode-1.2.27--1.3.7-blue)](https://opencode.ai) ⚠️ [1.3.8+ known issue](docs/OPENCODE_COMPATIBILITY.md)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.4.3-blue)](https://opencode.ai)
 
 Welcome to **lancedb-opencode-pro**! This plugin empowers OpenCode with a durable, long-term memory system powered by LanceDB.
 
@@ -12,11 +12,11 @@ To help you find what you need quickly, please select the guide that best fits y
 ## 🗺️ Choose Your Path
 
 ### ⚠️ Experiencing Issues?
-*You see "Memory store unavailable" error or plugin not loading on OpenCode v1.3.8+*
+*You see "Memory store unavailable" error or plugin not loading*
 👉 **[Read the Compatibility Guide (10 min)](docs/OPENCODE_COMPATIBILITY.md)** 
-- Known OpenCode v1.3.8+ NAPI bug (Issue #20623)
+- Fix: `rm -rf ~/.cache/opencode/node_modules/` then restart
+- OpenCode v1.4.3 fully supported (NAPI issue was a cache problem, not a loader bug)
 - Diagnosis checklist and solutions
-- Downgrade instructions & alternatives
 
 ### 🚀 First-Time Users
 *You are new to this project and want to get it running quickly.*
@@ -173,6 +173,7 @@ Alternatively, install via `.tgz` release asset or build from source. See [Insta
 
 ## 🗺️ Version History
 
+- **v0.8.1**: @opencode-ai/sdk and plugin upgrade to 1.4.3, bunfig.toml test isolation fix
 - **v0.8.0**: Structured Logging via client.app.log() per OpenCode best practices, Test Environment Isolation Fix
 - **v0.7.0**: OpenCode SDK v1.3.14 Compatibility, Node 22 memory_search Race Condition Fix
 - **v0.6.3**: Index Creation Guard (defer on empty/insufficient tables, fix #70), LanceDB 0.27.2

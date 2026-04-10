@@ -3,7 +3,7 @@
 **LanceDB-backed long-term memory provider for OpenCode**
 
 [![npm version](https://img.shields.io/npm/v/lancedb-opencode-pro)](https://www.npmjs.com/package/lancedb-opencode-pro)
-[![OpenCode](https://img.shields.io/badge/OpenCode-1.2.27+-blue)](https://opencode.ai)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.4.3-blue)](https://opencode.ai)
 
 歡迎使用 **lancedb-opencode-pro**！本擴充套件透過 LanceDB 為 OpenCode 提供持久且高效的長期記憶系統。
 
@@ -166,6 +166,7 @@ docker compose exec opencode-dev npm run verify:full
 
 ## 🗺️ 版本歷史
 
+- **v0.8.1**: @opencode-ai/sdk 與 plugin 升級至 1.4.3，bunfig.toml 測試隔離修復
 - **v0.8.0**: 結構化日誌 (client.app.log()) 遵循 OpenCode 最佳實踐、測試環境隔離修復
 - **v0.7.0**: OpenCode SDK v1.3.14 相容性、Node 22 memory_search 競爭條件修復
 - **v0.6.3**: 索引建立守衛（空表/不足資料時延後建立，修復 #70）、LanceDB 0.27.2
