@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.8.2] - 2026-04-11
+
+### Fixed
+
+- **Plugin version mismatch** (internal):
+  - Issue #83: Fixed version mismatch between package.json and PLUGIN_VERSION in source code
+  - Evidence:
+    - Spec: N/A (bugfix)
+    - Code: src/index.ts (PLUGIN_VERSION sync)
+    - Tests: N/A
+    - Surface: internal-build
+
+---
+
 ## [0.8.1] - 2026-04-10
 
 ### Changed
