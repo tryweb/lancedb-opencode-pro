@@ -188,6 +188,50 @@ If feature is internal-only, changelog wording must explicitly say "internal API
 # README.md + README_zh.md: update Version History (keep latest 5 versions)
 ```
 
+### Version Consistency Gate (CRITICAL)
+
+**Goal**: Prevent version mismatch between `package.json` version and `PLUGIN_VERSION` in source code.
+
+This is a common release bug - the published package shows a different version than what the code reports at runtime.
+
+```bash
+# Phase 4.0 — Version Synchronization Check
+
+# 1. Extract version from package.json
+PACKAGE_VERSION=$(node -e "console.log(require('./package.json').version)")
+echo "package.json version: $PACKAGE_VERSION"
+
+# 2. Extract PLUGIN_VERSION from source (handle both string formats)
+SOURCE_VERSION=$(grep 'PLUGIN_VERSION' src/index.ts | sed 's/.*= *["\x27]\([0-9.]*\)["\x27].*/\1/')
+echo "src/index.ts PLUGIN_VERSION: $SOURCE_VERSION"
+
+# 3. Compare and fix if mismatch
+if [ "$PACKAGE_VERSION" != "$SOURCE_VERSION" ]; then
+  echo "ERROR: Version mismatch detected!"
+  echo "  package.json: $PACKAGE_VERSION"
+  echo "  src/index.ts: $SOURCE_VERSION"
+  echo "Fixing now..."
+  sed -i "s/const PLUGIN_VERSION = \"[0-9.]*\"/const PLUGIN_VERSION = \"$PACKAGE_VERSION\"/" src/index.ts
+  echo "Updated PLUGIN_VERSION to $PACKAGE_VERSION"
+  git add src/index.ts
+  git commit -m "chore: sync PLUGIN_VERSION to $PACKAGE_VERSION"
+else
+  echo "Version consistency confirmed: $PACKAGE_VERSION"
+fi
+
+# 4. Rebuild to ensure dist/ is up to date
+npm run build
+git add dist/
+git commit -m "chore: rebuild for v$PACKAGE_VERSION" || true
+```
+
+**Why this gate is mandatory:**
+- Issue #83: "Plugin version mismatch" - published 0.8.1 but code showed 0.7.0
+- This causes confusion during debugging and version tracking
+- Runtime version reported must match published npm version
+
+**Note**: The sed pattern handles both `const PLUGIN_VERSION = "0.7.0"` and possible dynamic imports in the future.
+
 **Why update README at Release time (not at backlog-complete-merge):**
 1. Consistency with package.json and CHANGELOG.md
 2. Accuracy - shows only published versions
