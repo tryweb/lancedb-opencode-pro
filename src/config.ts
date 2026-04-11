@@ -69,6 +69,7 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
       ? process.env.LANCEDB_OPENCODE_PRO_OPENAI_TIMEOUT_MS ?? process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS
       : process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_TIMEOUT_MS;
   const timeoutRaw = timeoutEnv ?? embeddingRaw.timeoutMs;
+  const benchmarkReal = toBoolean(process.env.LANCEDB_OPENCODE_PRO_BENCHMARK_REAL, false);
 
   const retryRaw = (embeddingRaw.retry ?? {}) as Record<string, unknown>;
   const retryEnabled = toBoolean(process.env.LANCEDB_OPENCODE_PRO_EMBEDDING_RETRY_ENABLED ?? retryRaw.enabled, true);
@@ -112,6 +113,7 @@ export function resolveMemoryConfig(config: Config | undefined, worktree?: strin
     },
     injection,
     dedup,
+    benchmarkReal,
     includeGlobalScope: toBoolean(process.env.LANCEDB_OPENCODE_PRO_INCLUDE_GLOBAL_SCOPE ?? raw.includeGlobalScope, true),
     globalDetectionThreshold: Math.max(
       1,

@@ -246,9 +246,42 @@ gh pr create \
 - src/: ...
 
 ## Testing
+
 - [ ] Unit tests pass
 - [ ] Integration tests pass
 - [ ] E2E tests pass (if user-facing)
+
+### Performance Benchmark (Optional)
+
+Run performance verification to measure latency, throughput, and retrieval quality:
+
+```bash
+# Mock mode (fast, no external dependencies)
+./scripts/run-perf-benchmark.sh
+
+# Real Ollama mode (requires Ollama)
+./scripts/run-perf-benchmark.sh --real
+```
+
+Options:
+| Option | Description |
+|--------|-------------|
+| `--real` | Use real Ollama embedding |
+| `--quick` | Quick profile (500 records, 50 queries) |
+| `--standard` | Standard profile (2000 records, 200 queries) |
+| `--ollama URL` | Ollama base URL |
+| `--model MODEL` | Embedding model |
+
+Example with custom Ollama:
+```bash
+./scripts/run-perf-benchmark.sh --real --ollama http://192.168.11.206:11434 --model nomic-embed-text
+```
+
+Metrics tracked:
+- `search.p50` / `search.p99` — Search latency percentiles
+- `insert.avg` — Average insert latency
+- `recall@10` — Retrieval quality at 10
+- `concurrency.writeThroughput` — Concurrent write ops/sec
 EOF
 )" \
   --base main \

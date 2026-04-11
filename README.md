@@ -160,6 +160,15 @@ Full pre-release validation:
 docker compose exec opencode-dev npm run verify:full
 ```
 
+Performance benchmark (optional):
+```bash
+# Mock mode (fast)
+docker compose exec opencode-dev ./scripts/run-perf-benchmark.sh
+
+# Real Ollama mode
+docker compose exec opencode-dev ./scripts/run-perf-benchmark.sh --real
+```
+
 Check [docs/memory-validation-checklist.md](docs/memory-validation-checklist.md) for more details.
 
 ---

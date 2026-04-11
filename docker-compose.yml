@@ -12,6 +12,8 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL=nomic-embed-text
+      - LANCEDB_OPENCODE_PRO_BENCHMARK_REAL=0
       - OPENCODE_SERVER_PASSWORD=devonly
       - OPENCODE_CONFIG_CONTENT={"plugin":["file:///workspace/dist/index.js"]}
     extra_hosts:

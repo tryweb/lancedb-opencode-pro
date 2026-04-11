@@ -139,6 +139,7 @@ export interface MemoryRuntimeConfig {
   retrieval: RetrievalConfig;
   injection: InjectionConfig;
   dedup: DedupConfig;
+  benchmarkReal: boolean;
   includeGlobalScope: boolean;
   globalDetectionThreshold: number;
   globalDiscountFactor: number;

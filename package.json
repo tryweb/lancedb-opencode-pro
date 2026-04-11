@@ -49,6 +49,7 @@
     "test:effectiveness": "npm run test:foundation && npm run test:regression",
     "test:retrieval": "npm run build:test && node --test dist-test/test/retrieval/retrieval.test.js",
     "benchmark:latency": "npm run build:test && node dist-test/test/benchmark/latency.js",
+    "benchmark:perf": "npm run build:test && node dist-test/test/benchmark/performance-verify.js",
     "test:e2e": "node scripts/e2e-opencode-memory.mjs",
     "verify": "npm run typecheck && npm run build && npm run test:effectiveness && npm run test:retrieval",
     "verify:full": "npm run verify && npm run benchmark:latency && npm pack",
