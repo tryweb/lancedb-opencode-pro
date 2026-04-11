@@ -14,7 +14,7 @@ import { initLogger, log } from "./logger.js";
 import { calculateInjectionLimit, createSummarizationConfig, summarizeContent } from "./summarize.js";
 import { createMemoryTools, createFeedbackTools, createEpisodicTools, type ToolRuntimeState } from "./tools/index.js";
 
-const PLUGIN_VERSION = "0.8.1";
+const PLUGIN_VERSION = "0.8.2";
 
 const SCHEMA_VERSION = 1;
 
