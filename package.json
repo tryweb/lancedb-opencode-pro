@@ -51,7 +51,7 @@
     "benchmark:latency": "npm run build:test && node dist-test/test/benchmark/latency.js",
     "benchmark:perf": "npm run build:test && node dist-test/test/benchmark/performance-verify.js",
     "test:e2e": "node scripts/e2e-opencode-memory.mjs",
-    "verify": "npm run typecheck && npm run build && node --test dist-test/test/**/*.test.js",
+    "verify": "npm run typecheck && npm run build:test && npm run test",
     "verify:full": "npm run verify && npm run benchmark:latency && npm pack",
     "release:check": "npm run verify:full && npm publish --dry-run",
     "prepublishOnly": "npm run verify:full"

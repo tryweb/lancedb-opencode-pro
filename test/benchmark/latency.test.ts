@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { evaluateLatencyThresholds, runLatencyBenchmark } from "./latency.js";
 
-test({
-  name: "latency benchmark reports search, insert, and list metrics",
+test("latency benchmark reports search, insert, and list metrics", {
   timeout: 30000,
 }, async () => {
   const metrics = await runLatencyBenchmark("release");
