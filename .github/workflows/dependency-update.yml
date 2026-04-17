@@ -11,8 +11,9 @@ on:
         default: '@lancedb/lancedb'
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   check-dependency-updates:
@@ -21,6 +22,13 @@ jobs:
       lancedb-update: ${{ steps.lancedb.outputs.update-needed }}
       lancedb-latest: ${{ steps.lancedb.outputs.latest }}
       lancedb-current: ${{ steps.lancedb.outputs.current }}
+      opencode-plugin-update: ${{ steps.opencode-plugin.outputs.update-needed }}
+      opencode-plugin-latest: ${{ steps.opencode-plugin.outputs.latest }}
+      opencode-plugin-current: ${{ steps.opencode-plugin.outputs.current }}
+      opencode-sdk-update: ${{ steps.opencode-sdk.outputs.update-needed }}
+      opencode-sdk-latest: ${{ steps.opencode-sdk.outputs.latest }}
+      opencode-sdk-current: ${{ steps.opencode-sdk.outputs.current }}
+      any-update: ${{ steps.any-update.outputs.value }}
     
     steps:
       - name: Checkout
@@ -49,6 +57,51 @@ jobs:
           else
             echo "update-needed=false" >> $GITHUB_OUTPUT
             echo "::notice::LanceDB version is up to date: $CURRENT"
+          fi
+      
+      - name: Check @opencode-ai/plugin updates
+        id: opencode-plugin
+        run: |
+          CURRENT=$(node -e "console.log(require('./package.json').dependencies['@opencode-ai/plugin'])")
+          LATEST=$(npm view @opencode-ai/plugin version)
+          
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "update-needed=true" >> $GITHUB_OUTPUT
+            echo "::warning::@opencode-ai/plugin update available: $CURRENT -> $LATEST"
+          else
+            echo "update-needed=false" >> $GITHUB_OUTPUT
+            echo "::notice::@opencode-ai/plugin version is up to date: $CURRENT"
+          fi
+      
+      - name: Check @opencode-ai/sdk updates
+        id: opencode-sdk
+        run: |
+          CURRENT=$(node -e "console.log(require('./package.json').dependencies['@opencode-ai/sdk'])")
+          LATEST=$(npm view @opencode-ai/sdk version)
+          
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "update-needed=true" >> $GITHUB_OUTPUT
+            echo "::warning::@opencode-ai/sdk update available: $CURRENT -> $LATEST"
+          else
+            echo "update-needed=false" >> $GITHUB_OUTPUT
+            echo "::notice::@opencode-ai/sdk version is up to date: $CURRENT"
+          fi
+      
+      - name: Determine if any updates needed
+        id: any-update
+        run: |
+          if [ "${{ steps.lancedb.outputs.update-needed }}" == "true" ] || \
+             [ "${{ steps.opencode-plugin.outputs.update-needed }}" == "true" ] || \
+             [ "${{ steps.opencode-sdk.outputs.update-needed }}" == "true" ]; then
+            echo "value=true" >> $GITHUB_OUTPUT
+          else
+            echo "value=false" >> $GITHUB_OUTPUT
           fi
       
       - name: Audit dependencies for vulnerabilities
@@ -94,72 +147,171 @@ jobs:
         if: always()
         run: docker compose down -v --remove-orphans
 
-  create-update-issue:
-    needs: [check-dependency-updates, test-with-latest-lancedb]
+  test-with-latest-opencode-packages:
+    needs: check-dependency-updates
     if: |
-      needs.check-dependency-updates.outputs.lancedb-update == 'true' &&
-      needs.test-with-latest-lancedb.result == 'success'
+      needs.check-dependency-updates.outputs.opencode-plugin-update == 'true' ||
+      needs.check-dependency-updates.outputs.opencode-sdk-update == 'true'
     runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: docker-compose.ci.yml
     
     steps:
-      - name: Create GitHub Issue
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      
+      - name: Get latest opencode-ai package versions
+        run: |
+          echo "PLUGIN_LATEST=${{ needs.check-dependency-updates.outputs.opencode-plugin-latest }}" >> $GITHUB_ENV
+          echo "SDK_LATEST=${{ needs.check-dependency-updates.outputs.opencode-sdk-latest }}" >> $GITHUB_ENV
+      
+      - name: Update @opencode-ai/plugin in package.json
+        if: needs.check-dependency-updates.outputs.opencode-plugin-update == 'true'
+        run: |
+          sed -i "s/\"@opencode-ai\/plugin\": \"[^\"]*\"/\"@opencode-ai\/plugin\": \"$PLUGIN_LATEST\"/" package.json
+      
+      - name: Update @opencode-ai/sdk in package.json
+        if: needs.check-dependency-updates.outputs.opencode-sdk-update == 'true'
+        run: |
+          sed -i "s/\"@opencode-ai\/sdk\": \"[^\"]*\"/\"@opencode-ai\/sdk\": \"$SDK_LATEST\"/" package.json
+      
+      - name: Show updated package.json dependencies
+        run: |
+          echo "Updated dependencies:"
+          grep -E '@opencode-ai/plugin|@opencode-ai/sdk|@lancedb/lancedb' package.json || true
+      
+      - name: Build and test with latest opencode-ai packages
+        run: |
+          docker compose build --no-cache
+          docker compose up -d
+          docker compose exec -T app npm install
+          docker compose exec -T app npm run verify
+      
+      - name: Report compatibility status
+        if: always()
+        run: |
+          echo "::notice::Completed compatibility test with @opencode-ai/plugin ${{ needs.check-dependency-updates.outputs.opencode-plugin-latest }} and @opencode-ai/sdk ${{ needs.check-dependency-updates.outputs.opencode-sdk-latest }}"
+      
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  create-update-pr:
+    needs: [check-dependency-updates, test-with-latest-opencode-packages]
+    if: |
+      needs.check-dependency-updates.outputs.any-update == 'true' &&
+      needs.test-with-latest-opencode-packages.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      
+      - name: Get latest versions
+        run: |
+          echo "PLUGIN_LATEST=${{ needs.check-dependency-updates.outputs.opencode-plugin-latest }}" >> $GITHUB_ENV
+          echo "SDK_LATEST=${{ needs.check-dependency-updates.outputs.opencode-sdk-latest }}" >> $GITHUB_ENV
+          echo "PLUGIN_CURRENT=${{ needs.check-dependency-updates.outputs.opencode-plugin-current }}" >> $GITHUB_ENV
+          echo "SDK_CURRENT=${{ needs.check-dependency-updates.outputs.opencode-sdk-current }}" >> $GITHUB_ENV
+          echo "LANCEDB_LATEST=${{ needs.check-dependency-updates.outputs.lancedb-latest }}" >> $GITHUB_ENV
+          echo "LANCEDB_CURRENT=${{ needs.check-dependency-updates.outputs.lancedb-current }}" >> $GITHUB_ENV
+      
+      - name: Update @opencode-ai/plugin in package.json
+        if: needs.check-dependency-updates.outputs.opencode-plugin-update == 'true'
+        run: |
+          sed -i "s/\"@opencode-ai\/plugin\": \"[^\"]*\"/\"@opencode-ai\/plugin\": \"$PLUGIN_LATEST\"/" package.json
+      
+      - name: Update @opencode-ai/sdk in package.json
+        if: needs.check-dependency-updates.outputs.opencode-sdk-update == 'true'
+        run: |
+          sed -i "s/\"@opencode-ai\/sdk\": \"[^\"]*\"/\"@opencode-ai\/sdk\": \"$SDK_LATEST\"/" package.json
+      
+      - name: Show updated dependencies
+        run: |
+          echo "=== Updated dependencies ==="
+          grep -E '@opencode-ai/plugin|@opencode-ai/sdk|@lancedb/lancedb' package.json || true
+      
+      - name: Run npm install to update lock file
+        run: npm install
+      
+      - name: Create update branch
+        id: create-branch
+        run: |
+          BRANCH_NAME="deps/update-opencode-packages-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Commit changes
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: update @opencode-ai/plugin and/or @opencode-ai/sdk dependencies"
+      
+      - name: Push branch
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.create-branch.outputs.branch-name }}
+      
+      - name: Create Pull Request
         uses: actions/github-script@v7
         with:
           script: |
-            const current = '${{ needs.check-dependency-updates.outputs.lancedb-current }}';
-            const latest = '${{ needs.check-dependency-updates.outputs.lancedb-latest }}';
+            const pluginCurrent = '${{ needs.check-dependency-updates.outputs.opencode-plugin-current }}';
+            const pluginLatest = '${{ needs.check-dependency-updates.outputs.opencode-plugin-latest }}';
+            const sdkCurrent = '${{ needs.check-dependency-updates.outputs.opencode-sdk-current }}';
+            const sdkLatest = '${{ needs.check-dependency-updates.outputs.opencode-sdk-latest }}';
             
-            // Check for existing issue
-            const issues = await github.rest.issues.listForRepo({
+            const pluginUpdate = '${{ needs.check-dependency-updates.outputs.opencode-plugin-update }}' === 'true';
+            const sdkUpdate = '${{ needs.check-dependency-updates.outputs.opencode-sdk-update }}' === 'true';
+            
+            let title = 'chore: update opencode-ai dependencies';
+            let body = '## Dependency Updates\n\n';
+            
+            if (pluginUpdate) {
+              body += `- **@opencode-ai/plugin**: ${pluginCurrent} → ${pluginLatest}\n`;
+            }
+            if (sdkUpdate) {
+              body += `- **@opencode-ai/sdk**: ${sdkCurrent} → ${sdkLatest}\n`;
+            }
+            
+            body += '\n### Verification\n';
+            body += '- [x] Compatibility tests passed in CI\n';
+            body += '- [x] `npm run verify` passed\n';
+            body += '\n### Testing\n';
+            body += 'Automated tests were run with the latest versions inside Docker to verify compatibility.\n';
+            
+            // Check for existing PR
+            const prs = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'dependencies'
+              head: `${context.repo.owner}:${'${{ steps.create-branch.outputs.branch-name }}'}`
             });
             
-            const existingIssue = issues.data.find(issue => 
-              issue.title.includes('LanceDB') && 
-              issue.title.includes('update available')
-            );
-            
-            if (!existingIssue) {
-              await github.rest.issues.create({
+            if (prs.data.length === 0) {
+              await github.rest.pulls.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: `📦 LanceDB update available: ${current} → ${latest}`,
-                body: `
-            ## Dependency Update Available
-            
-            - **Package**: @lancedb/lancedb
-            - **Current**: ${current}
-            - **Latest**: ${latest}
-            - **Compatibility Test**: ✅ Passed
-            
-            ## Changes Required
-            
-            1. Update \`package.json\`:
-               \`\`\`json
-               "@lancedb/lancedb": "^${latest}"
-               \`\`\`
-            
-            2. Run \`npm install\` to update lock file
-            
-            3. Run verification: \`npm run verify:full\`
-            
-            4. Run Docker verification:
-               \`\`\`bash
-               docker compose build --no-cache && docker compose up -d
-               docker compose exec app npm run verify:full
-               \`\`\`
-            
-            ## Actions
-            
-            - [ ] Update package.json
-            - [ ] Update package-lock.json
-            - [ ] Run full test suite
-            - [ ] Update CHANGELOG.md
-            - [ ] Create PR with test evidence
-                `,
-                labels: ['dependencies', 'lancedb', 'automated']
+                title: title,
+                body: body,
+                base: 'main',
+                head: '${{ steps.create-branch.outputs.branch-name }}'
               });
+              console.log('PR created successfully');
+            } else {
+              console.log('PR already exists:', prs.data[0].html_url);
             }
