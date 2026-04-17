@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Effect } from "effect";
 import { resolveMemoryConfig } from "../../src/config.js";
 import plugin from "../../src/index.js";
 import { deriveProjectScope } from "../../src/scope.js";
@@ -194,7 +195,7 @@ async function createPluginHarness(options?: {
     worktree: WORKTREE,
     abort: new AbortController().signal,
     metadata() {},
-    async ask() {},
+    ask: () => Effect.void,
   };
 
   async function capture(text: string): Promise<void> {
