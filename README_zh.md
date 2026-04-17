@@ -166,6 +166,8 @@ docker compose exec opencode-dev npm run verify:full
 
 ## 🗺️ 版本歷史
 
+- **v0.8.3**: @opencode-ai/sdk 與 plugin 升級至 1.4.7、Effect 型別 mock 修復、SDK 相容性文檔
+- **v0.8.2**: 插件版本不一致修復（內部）
 - **v0.8.1**: @opencode-ai/sdk 與 plugin 升級至 1.4.3，bunfig.toml 測試隔離修復
 - **v0.8.0**: 結構化日誌 (client.app.log()) 遵循 OpenCode 最佳實踐、測試環境隔離修復
 - **v0.7.0**: OpenCode SDK v1.3.14 相容性、Node 22 memory_search 競爭條件修復
@@ -193,5 +195,5 @@ _[舊版歷史請參閱 CHANGELOG.md]_
 - **報告問題**: 軟體錯誤回報或功能請求，請至 [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues) 提交。
 - **授權協議**: MIT License - 詳見 [LICENSE](LICENSE)。
 
-**最後更新**: 2026-04-10
-**最新版本**: v0.8.1
+**最後更新**: 2026-04-17
+**最新版本**: v0.8.3

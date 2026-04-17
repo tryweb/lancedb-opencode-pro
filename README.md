@@ -3,7 +3,7 @@
 **LanceDB-backed long-term memory provider for OpenCode**
 
 [![npm version](https://img.shields.io/npm/v/lancedb-opencode-pro)](https://www.npmjs.com/package/lancedb-opencode-pro)
-[![OpenCode](https://img.shields.io/badge/OpenCode-1.4.3-blue)](https://opencode.ai)
+[![OpenCode](https://img.shields.io/badge/OpenCode-1.4.7-blue)](https://opencode.ai)
 
 Welcome to **lancedb-opencode-pro**! This plugin empowers OpenCode with a durable, long-term memory system powered by LanceDB.
 
@@ -182,6 +182,8 @@ Alternatively, install via `.tgz` release asset or build from source. See [Insta
 
 ## 🗺️ Version History
 
+- **v0.8.3**: @opencode-ai/sdk and plugin upgrade to 1.4.7, Effect type mock fix, SDK compatibility docs
+- **v0.8.2**: Plugin version mismatch fix (internal)
 - **v0.8.1**: @opencode-ai/sdk and plugin upgrade to 1.4.3, bunfig.toml test isolation fix
 - **v0.8.0**: Structured Logging via client.app.log() per OpenCode best practices, Test Environment Isolation Fix
 - **v0.7.0**: OpenCode SDK v1.3.14 Compatibility, Node 22 memory_search Race Condition Fix
@@ -209,5 +211,5 @@ See [CHANGELOG.md](CHANGELOG.md) for all changes.
 - **Issues**: Submit errors or requests on [GitHub Issues](https://github.com/tryweb/lancedb-opencode-pro/issues).
 - **License**: MIT License - see [LICENSE](LICENSE).
 
-**Last Updated**: 2026-04-10
-**Latest Version**: v0.8.1
+**Last Updated**: 2026-04-17
+**Latest Version**: v0.8.3

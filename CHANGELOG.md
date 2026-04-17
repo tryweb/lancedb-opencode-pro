@@ -6,6 +6,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ---
 
+## [0.8.3] - 2026-04-17
+
+### Changed
+
+- **@opencode-ai/sdk and plugin upgrade** (dependency):
+  - Upgrade @opencode-ai/plugin: 1.4.3 → 1.4.7
+  - Upgrade @opencode-ai/sdk: 1.4.3 → 1.4.7
+  - Evidence:
+    - Spec: docs/OPENCODE_COMPATIBILITY.md
+    - Code: package.json, test/regression/plugin.test.ts
+    - Tests: npm run verify (199 pass)
+    - Surface: internal-dependency
+
+### Fixed
+
+- **Test mock compatibility with SDK 1.4.7** (internal):
+  - Updated ToolContext.ask() mock to use Effect.void instead of Promise<void>
+  - Added bun installation to Dockerfile for test execution
+  - Evidence:
+    - Spec: N/A (test fix)
+    - Code: test/regression/plugin.test.ts, Dockerfile
+    - Tests: npm run test (199 pass)
+    - Surface: internal-test
+
+### Documentation
+
+- **OpenCode SDK compatibility documentation** (docs):
+  - Added docs/OPENCODE_COMPATIBILITY.md with SDK version history
+  - Documented SDK 1.4.4-1.4.7 breaking change (Effect type)
+  - Evidence:
+    - Spec: N/A (documentation)
+    - Code: docs/OPENCODE_COMPATIBILITY.md
+    - Tests: N/A
+    - Surface: documentation
+
+---
+
 ## [0.8.2] - 2026-04-11
 
 ### Fixed

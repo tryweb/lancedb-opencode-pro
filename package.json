@@ -1,6 +1,6 @@
 {
   "name": "lancedb-opencode-pro",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "LanceDB-backed long-term memory provider for OpenCode",
   "type": "module",
   "main": "dist/index.js",
@@ -43,23 +43,23 @@
     "build": "tsc -p tsconfig.json",
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run typecheck",
-    "test:foundation": "npm run build:test && node --test dist-test/test/foundation/foundation.test.js",
-    "test:regression": "npm run build:test && node --test dist-test/test/regression/plugin.test.js",
+    "test": "bun test",
+    "test:foundation": "npm run build:test && bun test ./dist-test/test/foundation/foundation.test.ts",
+    "test:regression": "npm run build:test && bun test ./dist-test/test/regression/plugin.test.ts",
     "test:effectiveness": "npm run test:foundation && npm run test:regression",
-    "test:retrieval": "npm run build:test && node --test dist-test/test/retrieval/retrieval.test.js",
+    "test:retrieval": "npm run build:test && bun test ./dist-test/test/retrieval/retrieval.test.ts",
     "benchmark:latency": "npm run build:test && node dist-test/test/benchmark/latency.js",
     "benchmark:perf": "npm run build:test && node dist-test/test/benchmark/performance-verify.js",
     "test:e2e": "node scripts/e2e-opencode-memory.mjs",
-    "verify": "npm run typecheck && npm run build && npm run test:effectiveness && npm run test:retrieval",
+    "verify": "npm run typecheck && npm run build && bun test",
     "verify:full": "npm run verify && npm run benchmark:latency && npm pack",
     "release:check": "npm run verify:full && npm publish --dry-run",
     "prepublishOnly": "npm run verify:full"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.27.2",
-    "@opencode-ai/plugin": "1.4.3",
-    "@opencode-ai/sdk": "1.4.3"
+    "@opencode-ai/plugin": "1.4.7",
+    "@opencode-ai/sdk": "1.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.13.9",
